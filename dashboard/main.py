@@ -96,6 +96,7 @@ class Dashboard(QtWidgets.QWidget):
         if path:
             data, times = load_eeg_data(path)
             self.eeg_plot.update_plot(times, data)
+            self.wavelet_plot.load_signal(data)
 
     def start_predictions(self):
         self.timer.start(2000)  # every 2 seconds
