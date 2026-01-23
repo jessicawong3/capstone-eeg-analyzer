@@ -3,7 +3,6 @@ import getpass
 from scp import SCPClient
 from pathlib import Path
 from modules.preprocess import preprocess_edf
-# from modules.scp_uploader import scp_to_device
 
 
 # REPLACE WITH REAL PYNQ PATH

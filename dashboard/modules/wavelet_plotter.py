@@ -7,6 +7,8 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
     def __init__(self, n_levels=6, window_len=300):
         super().__init__(title="Discrete Wavelet Transform |Coefficients|")
 
+        # self.setBackground("w")
+
         self.n_levels = n_levels
         self.window_len = window_len
 
@@ -40,6 +42,8 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
             yMin=0, yMax=n_levels
         )
 
+
+
     def update_coeffs(self, coeffs):
         """
         coeffs example:
@@ -63,6 +67,8 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
             self.coeff_img,
             autoLevels=True
         )
+
+
 
     def load_signal(self, signal, wavelet="db4", level=6):
         """
@@ -93,6 +99,7 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
 
 
 
+# TEST
 # from PyQt5 import QtWidgets
 # import pyqtgraph as pg
 # import numpy as np

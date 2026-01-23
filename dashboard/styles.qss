@@ -1,3 +1,6 @@
+
+/* ADD NAMES TO ALL THINGS WITH SPECIFIC STYLING !!! */
+
 /* =========================
    App-level defaults
    ========================= */
@@ -6,6 +9,10 @@ QWidget {
     font-family: "Inter", "Segoe UI", system-ui;
     font-size: 13px;
     color: #1f2933;
+}
+
+QLabel {
+    background: transparent;
 }
 
 /* Remove harsh focus outlines */
@@ -34,7 +41,7 @@ QLabel#CardTitle {
    ========================= */
 QLabel#BigPrediction {
     font-size: 30px;
-    font-weight: 700;
+    font-weight: 100;
     color: #111827;
     padding: 6px 0px;
 }
@@ -91,6 +98,37 @@ QRadioButton#ModeSelection:checked {
     border: 1px solid #9ca3af;
     font-weight: 600;
 }
+
+
+/* =========================
+   Slide combo toggle (Live/Offline mode, Sleep stage selection)
+   ========================= */
+
+/* Sleep stage buttons like offline/live segmented buttons */
+QPushButton#StageButton {
+    background: #e5e7eb;
+    border: 1px solid #d1d5db;
+    border-radius: 0px;
+    padding: 6px 16px;
+    font-weight: 500;
+    min-width: 40px;
+}
+
+QPushButton#StageButton:checked {
+    background: #ffffff;
+    border: 1px solid #9ca3af;
+    font-weight: 600;
+}
+
+QPushButton#StageButton:hover {
+    background: #f3f4f6;
+}
+
+QPushButton#StageButton:pressed {
+    background: #e5e7eb;
+}
+
+
 
 /* =========================
    Tables (Prediction Log)

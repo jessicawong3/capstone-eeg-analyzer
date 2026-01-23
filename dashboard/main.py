@@ -33,9 +33,24 @@ class Dashboard(QtWidgets.QWidget):
         
 
         # sleep stage options for live mode
-        self.stage_label = QtWidgets.QLabel("Select Sleep Stage:")
-        self.stage_combo = QtWidgets.QComboBox()
-        self.stage_combo.addItems(["Awake", "N1", "N2", "N3", "REM"])
+        self.stage_container = QtWidgets.QWidget()
+        # self.stage_container.setFixedHeight(40)  # match buttons' height
+        stages = ["Awake", "N1", "N2", "N3", "REM"]
+        self.stage_buttons = []
+        stage_layout = QtWidgets.QHBoxLayout(self.stage_container)
+        stage_layout.setSpacing(0)
+
+        for stage in stages:
+            btn = QtWidgets.QPushButton(stage)
+            btn.setCheckable(True)
+            btn.setObjectName("StageButton")
+            btn.setFixedHeight(32)
+            stage_layout.addWidget(btn)
+            self.stage_buttons.append(btn)
+
+        # Set default
+        self.stage_buttons[0].setChecked(True)
+
 
 
         # EEG and wavelet plot
@@ -49,13 +64,13 @@ class Dashboard(QtWidgets.QWidget):
 
 
         # Current prediction label
-        self.current_pred_value = QtWidgets.QLabel("Awake")
+        self.current_pred_value = QtWidgets.QLabel("")
         self.current_pred_value.setObjectName("BigPrediction")
 
 
         # Prediction table
-        self.pred_table = QtWidgets.QTableWidget(5, 3)
-        self.pred_table.setHorizontalHeaderLabels(["Time", "Stage", "Confidence"])
+        self.pred_table = QtWidgets.QTableWidget(5, 2)  # change to 3
+        self.pred_table.setHorizontalHeaderLabels(["Stage", "Confidence"])  # add time column
         self.pred_table.verticalHeader().setVisible(False)
         self.pred_table.setShowGrid(False)
         self.pred_table.horizontalHeader().setStretchLastSection(True)
@@ -74,8 +89,7 @@ class Dashboard(QtWidgets.QWidget):
 
         # Add dynamic control area to the right of the mode selection
         top_controls.addWidget(self.load_button)  # shown in offline
-        top_controls.addWidget(self.stage_label)
-        top_controls.addWidget(self.stage_combo)
+        top_controls.addWidget(self.stage_container)
 
         top_controls.addStretch()  # everything before left-aligned, after right-aligned
 
@@ -138,6 +152,9 @@ class Dashboard(QtWidgets.QWidget):
         self.stop_button.clicked.connect(self.stop_predictions)
         self.offline_radio.toggled.connect(self.update_mode)
         self.live_radio.toggled.connect(self.update_mode)
+
+        for btn in self.stage_buttons:
+            btn.clicked.connect(self.stage_selected)
 
 
 
@@ -202,12 +219,10 @@ class Dashboard(QtWidgets.QWidget):
     def update_mode(self):
         if self.offline_radio.isChecked():
             self.load_button.show()
-            self.stage_label.hide()
-            self.stage_combo.hide()
+            self.stage_container.hide()
         else:
             self.load_button.hide()
-            self.stage_label.show()
-            self.stage_combo.show()
+            self.stage_container.show()
 
 
 
@@ -227,6 +242,19 @@ class Dashboard(QtWidgets.QWidget):
         layout.addWidget(content)
 
         return card
+    
+
+    # FUNCTION: select sleep stage
+    def stage_selected(self):
+        clicked = self.sender()
+        # Uncheck all others
+        for btn in self.stage_buttons:
+            if btn != clicked:
+                btn.setChecked(False)
+        # Use clicked.text() for selected stage
+        selected_stage = clicked.text()
+        print("Selected Stage:", selected_stage)
+
 
 
 
