@@ -1,7 +1,7 @@
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import numpy as np
-from modules.data_loader import load_eeg_data
+from modules.data_loader import load_eeg_data, load_hypnogram_data, get_sleep_stage_at_time, suggest_hypnogram_file
 from modules.plotter import EEGPlot
 from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
@@ -11,7 +11,7 @@ class Dashboard(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sleep Stage Dashboard")
-        self.resize(1000, 800)
+        self.resize(1100, 800)
 
 
 
@@ -29,7 +29,7 @@ class Dashboard(QtWidgets.QWidget):
 
         # load button for offline mode
         self.load_button = QtWidgets.QPushButton("Load EEG Data")
-        self.load_button.setToolTip("Load EEG data from an EDF file")
+        self.load_button.setToolTip("Load EEG data from an EDF file (optionally with hypnogram)")
         
 
         # sleep stage options for live mode
@@ -69,12 +69,26 @@ class Dashboard(QtWidgets.QWidget):
 
 
         # Prediction table
-        self.pred_table = QtWidgets.QTableWidget(5, 2)  # change to 3
-        self.pred_table.setHorizontalHeaderLabels(["Stage", "Confidence"])  # add time column
+        self.pred_table = QtWidgets.QTableWidget(0, 4)  # 0 rows, 4 columns
+        self.pred_table.setHorizontalHeaderLabels(["Time", "Predicted", "Actual", "Confidence"])
         self.pred_table.verticalHeader().setVisible(False)
-        self.pred_table.setShowGrid(False)
-        self.pred_table.horizontalHeader().setStretchLastSection(True)
+        self.pred_table.setShowGrid(True)
         self.pred_table.setAlternatingRowColors(True)
+        self.pred_table.setSortingEnabled(False)  # Keep chronological order
+        
+        # Set up column sizing for better visibility
+        header = self.pred_table.horizontalHeader()
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed) # Time
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents) # Predicted
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents) # Actual
+        header.setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch) # Confidence
+
+        # Set fixed width for time column
+        header.resizeSection(0, 70) # Time column - compact but readable
+
+        # Set min size for table (visibility)
+        self.pred_table.setMinimumWidth(320)
+        self.pred_table.setMinimumHeight(200)
 
 
 
@@ -100,26 +114,47 @@ class Dashboard(QtWidgets.QWidget):
 
         # --- LEFT PANEL (PLOTS) ---
         left_panel = QtWidgets.QVBoxLayout()
+        left_panel.setSpacing(16)  # Set consistent spacing
+        
+        left_panel_widget = QtWidgets.QWidget()
+        left_panel_widget.setLayout(left_panel)
+
+        # Prevent excessive stretching
+        left_size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        left_size_policy.setVerticalStretch(0)
+        left_panel_widget.setSizePolicy(left_size_policy)
 
         # Cards for EEG and wavelet plots
         eeg_card = self.make_card("EEG Signal", self.eeg_plot)
+        eeg_card.setMaximumHeight(400)
         wavelet_card = self.make_card("Wavelet Coefficients", self.wavelet_plot)
+        wavelet_card.setMaximumHeight(400)
 
         left_panel.addWidget(eeg_card)
         left_panel.addWidget(wavelet_card)
+        left_panel.addStretch()  # prevent cards from expanding too much
 
 
 
         # --- RIGHT PANEL (PREDICTIONS) ---
         right_panel = QtWidgets.QVBoxLayout()
+        right_panel.setSpacing(16)  # spacing to match left panel
+        
+        right_panel_widget = QtWidgets.QWidget()
+        right_panel_widget.setLayout(right_panel)
+        right_panel_widget.setMinimumWidth(380)
+        
+        # ensure proper alignment
+        size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.MinimumExpanding)
+        size_policy.setVerticalStretch(0)
+        right_panel_widget.setSizePolicy(size_policy)
 
         # Current prediction card
         pred_card = self.make_card("Current Prediction", self.current_pred_value)
 
         # Prediction log card
         log_card = self.make_card("Prediction Log", self.pred_table)
-
-        # right_panel.setSpacing(16)
+        log_card.setMinimumWidth(350)
 
         right_panel.addWidget(pred_card)
         right_panel.addWidget(log_card)
@@ -132,8 +167,10 @@ class Dashboard(QtWidgets.QWidget):
         
         # everything other than controls
         sub_layout = QtWidgets.QHBoxLayout()
-        sub_layout.addLayout(left_panel, 3)
-        sub_layout.addLayout(right_panel, 1)
+        sub_layout.setAlignment(QtCore.Qt.AlignTop)  # Align both panels to top
+        sub_layout.setSpacing(16) 
+        sub_layout.addWidget(left_panel_widget, 2)   # Use widget instead of layout
+        sub_layout.addWidget(right_panel_widget, 1)  # Use widget instead of layout
 
         # sub_layout.setContentsMargins(16, 16, 16, 16)
         # sub_layout.setSpacing(16)
@@ -162,6 +199,13 @@ class Dashboard(QtWidgets.QWidget):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_prediction)
         self.model = MockEEGModel(latency=0.2)
+        
+        # --- DATA STORAGE ---
+        self.hypno_data = None
+        self.eeg_data = None
+        self.eeg_times = None
+        self.current_time = 0
+        self.prediction_history = []
 
 
         # Initialize visibility based on default mode
@@ -171,16 +215,102 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: loads EEG data from file
     def load_data(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open EEG EDF", "", "EDF Files (*.edf)")
-        if path:
-            data, times = load_eeg_data(path)
+        eeg_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Open EEG EDF File", "", "EDF Files (*.edf)")
+        if not eeg_path:
+            return
+        
+        # Load the EEG data
+        try:
+            data, times = load_eeg_data(eeg_path)
+            self.eeg_data = data
+            self.eeg_times = times
             self.eeg_plot.update_plot(times, data)
             self.wavelet_plot.load_signal(data)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, "EEG Loading Error", 
+                f"Failed to load EEG file:\n{str(e)}")
+            return
+
+        # See if user has a hypnogram file
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Load Hypnogram?",
+            "<html>"
+            "Do you have a corresponding hypnogram file with sleep stage annotations?<br><br>"
+            "Loading a hypnogram will allow you to see the actual sleep stages "
+            "alongside your model's predictions for comparison."
+            "</html>",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No # Default to No when no suggestions
+        )  
+        
+        if reply == QtWidgets.QMessageBox.Yes:
+            self.load_hypnogram_dialog()
+    
+
+    
+    # FUNCTION: loads hypnogram data from file (called from load_data)
+    def load_hypnogram_dialog(self):
+        hypno_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Open Hypnogram EDF File", "", "EDF Files (*.edf)")
+        if not hypno_path:
+            return
+        
+        # Load hypnogram data
+        try:
+            onset_times, sleep_stages, durations = load_hypnogram_data(hypno_path)
+            if onset_times is not None:
+                self.hypno_data = (onset_times, sleep_stages, durations)
+                print(f"Loaded {len(sleep_stages)} sleep stage annotations")
+                
+                # Display summary of loaded stages
+                stage_counts = {}
+                for stage in sleep_stages:
+                    stage_counts[stage] = stage_counts.get(stage, 0) + 1
+                print("Stage distribution:", stage_counts)
+                
+                # Show success message with details
+                total_duration = sum(durations) / 3600  # hours
+                unique_stages = len(set(sleep_stages))
+                most_common_stage = max(stage_counts, key=stage_counts.get)
+                
+                QtWidgets.QMessageBox.information(
+                    self, "Hypnogram Loaded Successfully", 
+                    f"Successfully loaded sleep stage data:\n\n"
+                    f"• {len(sleep_stages)} total annotations\n"
+                    f"• {unique_stages} different sleep stages\n"
+                    f"• Total recording duration: {total_duration:.1f} hours\n\n"
+                    # f"• Most common stage: {most_common_stage}\n\n"
+                    f"Ready to compare predictions vs actual stages!\n"
+                )
+
+            else:
+                QtWidgets.QMessageBox.warning(
+                    self, "Hypnogram Loading Error", 
+                    "Failed to load hypnogram file.\n\n"
+                    "Please ensure:\n"
+                    "• The file is a valid EDF file\n"
+                    "• The file contains sleep stage annotations\n"
+                    "• The file is not corrupted\n\n"
+                    "Check the console output for more details.")
+                
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, "Hypnogram Loading Error",
+                f"An error occurred while loading the hypnogram:\n{str(e)}")
 
 
 
     # FUNCTION: starts the predictions
     def start_predictions(self):
+        self.current_time = 0  # reset time
+        
+        # Clear prediction table
+        self.pred_table.setRowCount(0)
+        self.prediction_history.clear()
+        
         self.timer.start(2000)  # every 2 seconds
 
 
@@ -193,12 +323,61 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: updates the prediction
     def update_prediction(self):
-        features = None  # Placeholder for real features
+        features = None
         stage, confs = self.model.predict(features)
         self.current_pred_value.setText(stage)
-        for i, (s, c) in enumerate(confs.items()):
-            self.pred_table.setItem(i, 0, QtWidgets.QTableWidgetItem(s))
-            self.pred_table.setItem(i, 1, QtWidgets.QTableWidgetItem(f"{c*100:.1f}%"))
+
+        # Get top confidence for predicted stage
+        top_confidence = confs[stage]
+
+        # Format time display
+        hours = int(self.current_time // 3600)
+        minutes = int((self.current_time % 3600) // 60)
+        seconds = int(self.current_time % 60)
+        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+        # Get actual stage from hypnogram if available
+        if self.hypno_data is not None:
+            actual_stage = get_sleep_stage_at_time(self.hypno_data, self.current_time)
+        else:
+            actual_stage = "N/A"
+
+        # Add new row to prediction table
+        row_count = self.pred_table.rowCount()
+        self.pred_table.insertRow(row_count)
+        
+        # Populate the new row
+        self.pred_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(time_str))
+        self.pred_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(stage))
+        self.pred_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(actual_stage))
+        self.pred_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(f"{top_confidence*100:.1f}%"))
+        
+
+        # Colour code prediction based on accuracy
+        if actual_stage != "N/A" and stage == actual_stage:
+            # Correct prediction
+            for col in range(4):
+                item = self.pred_table.item(row_count, col)
+                if item:
+                    item.setBackground(QtGui.QColor(200, 255, 200))  # light green
+
+        elif actual_stage != "N/A":
+            # Incorrect prediction
+            for col in range(4):
+                item = self.pred_table.item(row_count, col)
+                if item:
+                    item.setBackground(QtGui.QColor(255, 220, 220))  # light red
+
+
+        # Scroll to show latest prediction
+        self.pred_table.scrollToBottom()
+        
+        # Limit table to last 20 rows
+        if row_count >= 20:
+            self.pred_table.removeRow(0)
+
+        # Increment time for next prediction (30-second epochs)
+        self.current_time += 30
 
         # --- SAMPLE COEFF STREAM ---
         coeffs = {

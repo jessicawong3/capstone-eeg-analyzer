@@ -47,6 +47,17 @@ QLabel#BigPrediction {
 }
 
 /* =========================
+   Time progress display
+   ========================= */
+QLabel#TimeProgress {
+    font-size: 18px;
+    font-weight: 500;
+    color: #4f46e5;
+    padding: 6px 0px;
+    font-family: "Monaco", "Courier New", monospace;
+}
+
+/* =========================
    Buttons (Start / Stop / Load)
    ========================= */
 QPushButton {
