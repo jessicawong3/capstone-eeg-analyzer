@@ -15,8 +15,10 @@ def preprocess_edf(input_path, output_path):
     # # Save preprocessed data
     # raw.save(output_path, overwrite=True)
 
-    # Get data in µV
-    data = raw.get_data() * 1e6  # V → µV
+    # don't need?
+    # # Get data in µV
+    # data = raw.get_data() * 1e6  # V -> µV
+    data = raw.get_data()
 
     # Export FPGA binary
     export_fpga_bin(data, output_path)
