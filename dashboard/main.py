@@ -5,6 +5,8 @@ from modules.data_loader import load_eeg_data, load_hypnogram_data, get_sleep_st
 from modules.plotter import EEGPlot
 from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
+from modules.workers import McuWorker
+from modules.mcu_transfer_pipeline import DEFAULT_PORT
 
 
 class Dashboard(QtWidgets.QWidget):
@@ -24,6 +26,7 @@ class Dashboard(QtWidgets.QWidget):
         self.live_radio.setObjectName("ModeSelection")
         # set default
         self.offline_radio.setChecked(True)
+        self.live_radio.setChecked(False)
         self.live_mode = False
 
 
@@ -207,6 +210,10 @@ class Dashboard(QtWidgets.QWidget):
         self.current_time = 0
         self.prediction_history = []
 
+        # --- MCU ---
+        self.mcu_worker = None
+        self.mcu_port = DEFAULT_PORT
+
 
         # Initialize visibility based on default mode
         self.update_mode()
@@ -305,19 +312,62 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: starts the predictions
     def start_predictions(self):
-        self.current_time = 0  # reset time
-        
-        # Clear prediction table
+        if self.live_radio.isChecked():
+            self._start_live()
+        else:
+            self._start_offline()
+
+
+    # FUNCTION: starts offline mode
+    def _start_offline(self):
+        self.current_time = 0
         self.pred_table.setRowCount(0)
         self.prediction_history.clear()
-        
-        self.timer.start(2000)  # every 2 seconds
+        self.timer.start(2000)  # mock model update every 2 s
 
+
+    # FUNCTION: starts live mode
+    def _start_live(self):
+        # Open the serial port and start streaming MCU samples
+
+        # Stop any existing worker
+        self._stop_mcu_worker()
+
+        # Get the currently selected stage
+        selected_stage = self._get_selected_stage()
+
+        # Start worker
+        self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
+        self.mcu_worker.sample_ready.connect(self._on_mcu_sample)
+        self.mcu_worker.error.connect(self._on_mcu_error)
+        self.eeg_plot.start_live()
+        self.mcu_worker.start()
 
 
     # FUNCTION: stops the predictions
     def stop_predictions(self):
         self.timer.stop()
+        self._stop_mcu_worker()
+        self.eeg_plot.stop_live()
+
+
+    # FUNCTION: stops an mcu worker
+    def _stop_mcu_worker(self):
+        if self.mcu_worker is not None:
+            self.mcu_worker.stop()
+            self.mcu_worker.wait()
+            self.mcu_worker = None
+
+
+    # SLOT: called for each preprocessed voltage sample from the MCU worker
+    def _on_mcu_sample(self, voltage: float):
+        self.eeg_plot.append_sample(voltage)
+
+
+    # SLOT: called when the MCU worker encounters a serial error
+    def _on_mcu_error(self, message: str):
+        self._stop_mcu_worker()
+        QtWidgets.QMessageBox.critical(self, "MCU Connection Error", message)
 
 
 
@@ -399,9 +449,13 @@ class Dashboard(QtWidgets.QWidget):
         if self.offline_radio.isChecked():
             self.load_button.show()
             self.stage_container.hide()
+            # Stop any running MCU stream when switching to offline
+            self._offline_mcu()
+            self.eeg_plot.stop_live()
         else:
             self.load_button.hide()
             self.stage_container.show()
+            self._start_live()
 
 
 
@@ -423,16 +477,49 @@ class Dashboard(QtWidgets.QWidget):
         return card
     
 
-    # FUNCTION: select sleep stage
+    # FUNCTION: select sleep stage (live mode)
     def stage_selected(self):
         clicked = self.sender()
         # Uncheck all others
         for btn in self.stage_buttons:
             if btn != clicked:
                 btn.setChecked(False)
-        # Use clicked.text() for selected stage
+            else:
+                btn.setChecked(True)
+
         selected_stage = clicked.text()
         print("Selected Stage:", selected_stage)
+
+        # If the MCU worker is already running, restart it with the new stage
+        # if self.mcu_worker is not None and self.mcu_worker.isRunning():
+        self._stop_mcu_worker()
+        self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
+        self.mcu_worker.sample_ready.connect(self._on_mcu_sample)
+        
+        self.mcu_worker.error.connect(self._on_mcu_error)
+        self.eeg_plot.start_live()
+        print("Restarting? should be with stage ", selected_stage)
+        self.mcu_worker.start()
+
+
+    # FUNCTION: gets the selected stage
+    def _get_selected_stage(self):
+        # Return text of whichever stage button is currently checked
+        for btn in self.stage_buttons:
+            if btn.isChecked():
+                print("get_selected_stage: ", btn.text())
+                return btn.text()
+        # return "Awake"  # fallback
+
+
+    # FUNCTION: turn mcu offline
+    def _offline_mcu(self):
+        self._stop_mcu_worker()
+        self.mcu_worker = McuWorker(port=self.mcu_port, stage="Offline")
+        self.mcu_worker.error.connect(self._on_mcu_error)
+        print("Restarting? should be with stage ", "Offline")
+        self.mcu_worker.start()
+        self._stop_mcu_worker()
 
 
 
