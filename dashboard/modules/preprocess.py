@@ -12,7 +12,6 @@ def preprocess_edf(input_path, output_path):
     eeg_channel = "EEG Fpz-Cz"
 
     # Resample to 256 Hz  # TODO: Reorder/redo this elsewhere if necessary
-    raw.resample(TARGET_FS)
     raw.resample(sfreq=TARGET_FS, npad='auto', verbose=False)
     raw.filter(l_freq=0.5, h_freq=None, picks=[eeg_channel], verbose=False)
 
@@ -52,34 +51,6 @@ def quantization_function(int_bits, fraction_bits, signed_dec):
 
 
 # --- For MCU --- #
-# 1. MCU input comes in *1000, quantized, number (in format: "####/r")
-# 2. Convert to uint16_t
-# 3. Undo quantization, then /1000 to get "real" values
-def preprocess_voltages(input_path, output_path):
-    with open(input_path, 'r') as f:
-        content = f.read()
-
-    # Parse the input
-    samples = []
-    for line in content.split('/r'):
-        try:
-            value = int(line.strip())
-            samples.append(value)
-        except ValueError:
-            continue
-
-    # Convert to uint16_t
-    samples = np.array(samples, dtype=np.uint16)
-
-    # Undo quantization
-    real_values = samples.astype(np.float32) / 1000.0
-
-    # Export FPGA binary
-    export_fpga_bin(real_values, output_path)
-
-    return output_path
-
-
 def parse_mcu_sample(raw_token: str):
     # Convert a single raw MCU token to a real voltage value.
     # 1. Parse the token string to an integer
