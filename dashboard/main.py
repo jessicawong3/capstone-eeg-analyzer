@@ -1,12 +1,13 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import numpy as np
-from modules.data_loader import load_eeg_data, load_hypnogram_data, get_sleep_stage_at_time, suggest_hypnogram_file
+from modules.data_loader import load_eeg_data, load_hypnogram_data, get_sleep_stage_at_time
 from modules.plotter import EEGPlot
 from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
 from modules.workers import McuWorker
 from modules.mcu_transfer_pipeline import DEFAULT_PORT
+from uploader import UploadProgressDialog
 
 
 class Dashboard(QtWidgets.QWidget):
@@ -14,7 +15,6 @@ class Dashboard(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Sleep Stage Dashboard")
         self.resize(1100, 800)
-
 
 
         # --- WIDGETS ---
@@ -239,6 +239,16 @@ class Dashboard(QtWidgets.QWidget):
                 self, "EEG Loading Error", 
                 f"Failed to load EEG file:\n{str(e)}")
             return
+
+        # Upload file to the PYNQ board
+        dialog = UploadProgressDialog(eeg_path, parent=self)
+        result = dialog.exec_()   # blocks UI interaction but NOT the event loop
+        if result == QtWidgets.QDialog.Rejected:
+            QtWidgets.QMessageBox.warning(
+                self, "Upload Failed",
+                f"The file could not be transferred to the PYNQ board:\n\n{dialog.error_message()}\n\n"
+                "You can still use the file locally for offline analysis."
+            )
 
         # See if user has a hypnogram file
         reply = QtWidgets.QMessageBox.question(
