@@ -6,38 +6,35 @@ import numpy as np
 TARGET_FS = 256  # Hz
 
 
+# --- For FPGA --- #
 def preprocess_edf(input_path, output_path):
     raw = mne.io.read_raw_edf(input_path, preload=True, verbose=False)
 
-    # Resample to 256 Hz
+    # Resample to 256 Hz  # TODO: Reorder/redo this elsewhere if necessary
     raw.resample(TARGET_FS)
 
     data = raw.get_data()
 
-    # Export FPGA binary
-    export_fpga_bin(data, output_path)
+    # TODO: Jenny's preprocessing steps here
+    selected_channel_data = None
+
+    # TODO: Simran's quantizations steps here with x1000 data
+    quantized = quantization_function(selected_channel_data * 1000)
+
+    # Export quantized data
+    quantized.tofile(output_path)
 
     return output_path
 
 
-def export_fpga_bin(data_uv, out_path):
-    """
-    data_uv: shape (channels, samples) OR (samples,)
-             values in microvolts (float)
-    out_path: path to .bin file
-    """
-    # Ensure 2D [channels, samples]
-    if data_uv.ndim == 1:
-        data_uv = data_uv[np.newaxis, :]
-
-    # Convert to int16 fixed-point
-    data_i16 = np.clip(data_uv, -32768, 32767).astype("<i2")
-
-    # Interleave samples: [s0_ch0, s0_ch1, ..., s1_ch0, ...]
-    interleaved = data_i16.T
-    interleaved.tofile(out_path)
+# TODO: Replace with Simran's quantization function
+def quantization_function(data, out_path):
+    quantized = None
+    return quantized
 
 
+
+# --- For MCU --- #
 # 1. MCU input comes in *1000, quantized, number (in format: "####/r")
 # 2. Convert to uint16_t
 # 3. Undo quantization, then /1000 to get "real" values
@@ -78,14 +75,14 @@ def parse_mcu_sample(raw_token: str):
         # 1. parse to integer
         if raw_token.isdigit():
             raw_int = int(raw_token.replace("\r", "").strip())
-            print(f"Parsed raw token '{raw_token}' to int: {raw_int}")
+            # print(f"Parsed raw token '{raw_token}' to int: {raw_int}")
         else:
-            print(f"Raw token '{raw_token}' is not a digit.")
+            # print(f"Raw token '{raw_token}' is not a digit.")
             return None
 
         # 2. cast to uint16
         as_uint16 = np.uint16(raw_int)
-        print(f"Cast raw token '{raw_token}' to uint16: {as_uint16}")
+        # print(f"Cast raw token '{raw_token}' to uint16: {as_uint16}")
 
         # 3. undo quantization
         dequantized = signed_fp_to_decimal_float(1, 14, as_uint16)
@@ -93,7 +90,7 @@ def parse_mcu_sample(raw_token: str):
         # 4. divide by 1000 to get volts
         voltage = dequantized / 1000.0
 
-        print(f"Parsed token '{raw_token}' to voltage: {voltage} V")
+        # print(f"Parsed token '{raw_token}' to voltage: {voltage} V")
         return voltage
     except (ValueError, TypeError):
         print(f"Failed to parse token '{raw_token}'")
