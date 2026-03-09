@@ -20,41 +20,41 @@ class EEGPlot(QtWidgets.QWidget):
         layout.addWidget(self.plot_widget)
         self.setLayout(layout)
 
-        # Rolling buffer for live mode
-        self._live_buffer = np.zeros(LIVE_WINDOW)
-        self._live_fs = 256 # adjust for MCU Hz !!!
-        self._live_times = np.arange(LIVE_WINDOW) / self._live_fs
-        self._live_mode = False
+        # Rolling buffer for synthetic mode
+        self._synthetic_buffer = np.zeros(LIVE_WINDOW)
+        self._synthetic_fs = 256 # adjust for MCU Hz !!!
+        self._synthetic_times = np.arange(LIVE_WINDOW) / self._synthetic_fs
+        self._synthetic_mode = False
         self._last_redraw = 0.0  # timestamp of last setData call
 
-    # --- Offline mode ---
+    # --- Real Data mode ---
     def update_plot(self, times, data):
-        """Render a full static EEG trace (offline mode)."""
-        self._live_mode = False
+        """Render a full static EEG trace (real data mode)."""
+        self._synthetic_mode = False
         self.plot_widget.enableAutoRange()
         self.curve.setData(times, data)
 
 
-    # --- Live mode ---
-    def start_live(self, fs: int = 1000):
+    # --- Synthetic mode ---
+    def start_synthetic(self, fs: int = 1000):
         """Switch to rolling-window live display at the given sample rate."""
-        self._live_fs = fs
-        self._live_times = np.arange(LIVE_WINDOW) / fs
-        self._live_buffer = np.zeros(LIVE_WINDOW)
-        self._live_mode = True
+        self._synthetic_fs = fs
+        self._synthetic_times = np.arange(LIVE_WINDOW) / fs
+        self._synthetic_buffer = np.zeros(LIVE_WINDOW)
+        self._synthetic_mode = True
         self.plot_widget.enableAutoRange()
 
 
     def append_chunk(self, chunk: np.ndarray):
         """Shift a numpy array of samples into the rolling buffer and redraw once."""
-        if not self._live_mode:
+        if not self._synthetic_mode:
             return
         n = len(chunk)
-        self._live_buffer = np.roll(self._live_buffer, -n)
-        self._live_buffer[-n:] = chunk
-        self.curve.setData(self._live_times, self._live_buffer)
+        self._synthetic_buffer = np.roll(self._synthetic_buffer, -n)
+        self._synthetic_buffer[-n:] = chunk
+        self.curve.setData(self._synthetic_times, self._synthetic_buffer)
 
 
-    def stop_live(self):
-        """Exit live mode (keeps last frame visible)."""
-        self._live_mode = False
+    def stop_synthetic(self):
+        """Exit synthetic mode (keeps last frame visible)."""
+        self._synthetic_mode = False

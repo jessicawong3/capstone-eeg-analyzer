@@ -30,7 +30,7 @@ class DatasetTransferWorker(QThread):
             self.error.emit(str(e))
 
 
-# Worker thread for taking in live MCU data
+# Worker thread for taking in synthetic MCU data
 class McuWorker(QThread):
 
     # Emits a numpy array of CHUNK_SIZE preprocessed voltage samples

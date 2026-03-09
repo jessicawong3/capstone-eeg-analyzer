@@ -112,10 +112,10 @@ QRadioButton#ModeSelection:checked {
 
 
 /* =========================
-   Slide combo toggle (Live/Offline mode, Sleep stage selection)
+   Slide combo toggle (Synthetic / Real Data mode, Sleep stage selection)
    ========================= */
 
-/* Sleep stage buttons like offline/live segmented buttons */
+/* Sleep stage buttons like real data / synthetic segmented buttons */
 QPushButton#StageButton {
     background: #e5e7eb;
     border: 1px solid #d1d5db;

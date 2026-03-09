@@ -72,8 +72,8 @@ def parse_mcu_sample(raw_token: str):
         as_uint16 = np.uint16(raw_int)
         # print(f"Cast raw token '{raw_token}' to uint16: {as_uint16}")
 
-        # 3. undo quantizationsigned_fp_to_decimal_float
-        dequantized = (1, 14, as_uint16)
+        # 3. undo quantization
+        dequantized = signed_fp_to_decimal_float(1, 14, as_uint16)
 
         # 4. divide by 1000 to get volts
         voltage = dequantized / 1000.0

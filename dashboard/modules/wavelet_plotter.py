@@ -75,7 +75,7 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
         signal: 1D EEG array (same as EEGPlot)
         """
 
-        # Compute DWT (offline)
+        # Compute DWT (real data mode)
         coeffs = pywt.wavedec(signal, wavelet, level=level)
 
         # coeffs = [A6, D6, D5, ..., D1]

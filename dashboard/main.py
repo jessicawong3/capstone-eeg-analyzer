@@ -20,22 +20,22 @@ class Dashboard(QtWidgets.QWidget):
         # --- WIDGETS ---
 
         # mode selection using radio buttons
-        self.offline_radio = QtWidgets.QRadioButton("Offline")
-        self.offline_radio.setObjectName("ModeSelection")
-        self.live_radio = QtWidgets.QRadioButton("Live")
-        self.live_radio.setObjectName("ModeSelection")
+        self.real_data_radio = QtWidgets.QRadioButton("Real Data")
+        self.real_data_radio.setObjectName("ModeSelection")
+        self.synthetic_radio = QtWidgets.QRadioButton("Synthetic")
+        self.synthetic_radio.setObjectName("ModeSelection")
         # set default
-        self.offline_radio.setChecked(True)
-        self.live_radio.setChecked(False)
-        self.live_mode = False
+        self.real_data_radio.setChecked(True)
+        self.synthetic_radio.setChecked(False)
+        self.synthetic_mode = False
 
 
-        # load button for offline mode
+        # load button for real data mode
         self.load_button = QtWidgets.QPushButton("Load EEG Data")
         self.load_button.setToolTip("Load EEG data from an EDF file (optionally with hypnogram)")
         
 
-        # sleep stage options for live mode
+        # sleep stage options for synthetic mode
         self.stage_container = QtWidgets.QWidget()
         # self.stage_container.setFixedHeight(40)  # match buttons' height
         stages = ["Awake", "N1", "N2", "N3", "REM"]
@@ -101,11 +101,11 @@ class Dashboard(QtWidgets.QWidget):
         top_controls = QtWidgets.QHBoxLayout()
 
         # Mode selection
-        top_controls.addWidget(self.offline_radio)
-        top_controls.addWidget(self.live_radio)
+        top_controls.addWidget(self.real_data_radio)
+        top_controls.addWidget(self.synthetic_radio)
 
         # Add dynamic control area to the right of the mode selection
-        top_controls.addWidget(self.load_button)  # shown in offline
+        top_controls.addWidget(self.load_button)  # shown in real data
         top_controls.addWidget(self.stage_container)
 
         top_controls.addStretch()  # everything before left-aligned, after right-aligned
@@ -190,8 +190,8 @@ class Dashboard(QtWidgets.QWidget):
         self.load_button.clicked.connect(self.load_data)
         self.start_button.clicked.connect(self.start_predictions)
         self.stop_button.clicked.connect(self.stop_predictions)
-        self.offline_radio.toggled.connect(self.update_mode)
-        self.live_radio.toggled.connect(self.update_mode)
+        self.real_data_radio.toggled.connect(self.update_mode)
+        self.synthetic_radio.toggled.connect(self.update_mode)
 
         for btn in self.stage_buttons:
             btn.clicked.connect(self.stage_selected)
@@ -322,22 +322,22 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: starts the predictions
     def start_predictions(self):
-        if self.live_radio.isChecked():
-            self._start_live()
+        if self.synthetic_radio.isChecked():
+            self._start_synthetic()
         else:
-            self._start_offline()
+            self._start_real_data()
 
 
-    # FUNCTION: starts offline mode
-    def _start_offline(self):
+    # FUNCTION: starts real data mode
+    def _start_real_data(self):
         self.current_time = 0
         self.pred_table.setRowCount(0)
         self.prediction_history.clear()
         self.timer.start(2000)  # mock model update every 2 s
 
 
-    # FUNCTION: starts live mode
-    def _start_live(self):
+    # FUNCTION: starts synthetic mode
+    def _start_synthetic(self):
         # Open the serial port and start streaming MCU samples
 
         # Stop any existing worker
@@ -350,7 +350,7 @@ class Dashboard(QtWidgets.QWidget):
         self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
         self.mcu_worker.chunk_ready.connect(self._on_mcu_chunk)
         self.mcu_worker.error.connect(self._on_mcu_error)
-        self.eeg_plot.start_live()
+        self.eeg_plot.start_synthetic()
         self.mcu_worker.start()
 
 
@@ -358,7 +358,7 @@ class Dashboard(QtWidgets.QWidget):
     def stop_predictions(self):
         self.timer.stop()
         self._stop_mcu_worker()
-        self.eeg_plot.stop_live()
+        self.eeg_plot.stop_synthetic()
 
 
     # FUNCTION: stops an mcu worker
@@ -454,18 +454,18 @@ class Dashboard(QtWidgets.QWidget):
 
 
 
-    # FUNCTION: updates layout based on mode (offline/live)
+    # FUNCTION: updates layout based on mode (real data / synthetic)
     def update_mode(self):
-        if self.offline_radio.isChecked():
+        if self.real_data_radio.isChecked():
             self.load_button.show()
             self.stage_container.hide()
-            # Stop any running MCU stream when switching to offline
+            # Stop any running MCU stream when switching to real data
             self._offline_mcu()
-            self.eeg_plot.stop_live()
+            self.eeg_plot.stop_synthetic()
         else:
             self.load_button.hide()
             self.stage_container.show()
-            self._start_live()
+            self._start_synthetic()
 
 
 
@@ -487,7 +487,7 @@ class Dashboard(QtWidgets.QWidget):
         return card
     
 
-    # FUNCTION: select sleep stage (live mode)
+    # FUNCTION: select sleep stage (synthetic mode)
     def stage_selected(self):
         clicked = self.sender()
         # Uncheck all others
@@ -506,7 +506,7 @@ class Dashboard(QtWidgets.QWidget):
         self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
         self.mcu_worker.chunk_ready.connect(self._on_mcu_chunk)
         self.mcu_worker.error.connect(self._on_mcu_error)
-        self.eeg_plot.start_live()
+        self.eeg_plot.start_synthetic()
         print("Restarting? should be with stage ", selected_stage)
         self.mcu_worker.start()
 
