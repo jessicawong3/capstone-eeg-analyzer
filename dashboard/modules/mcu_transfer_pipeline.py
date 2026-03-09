@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import serial
 import serial.tools.list_ports
+import numpy as np
+import time
 
 # Serial port settings
 BAUD_RATE = 115200
@@ -53,3 +55,10 @@ def read_one_sample(ser: serial.Serial):
     except serial.SerialException:
         return None
     
+
+# Mock mcu output (0 to 2^16 - 1) — sleeps to simulate real MCU sample rate
+def mock_read_one_sample():
+    time.sleep(1 / 256)   # simulate 256 Hz
+    line = str(np.random.randint(0, 2**16 - 1))
+    return line
+

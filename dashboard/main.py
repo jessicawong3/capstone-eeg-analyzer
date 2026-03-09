@@ -338,7 +338,7 @@ class Dashboard(QtWidgets.QWidget):
 
         # Start worker
         self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
-        self.mcu_worker.sample_ready.connect(self._on_mcu_sample)
+        self.mcu_worker.chunk_ready.connect(self._on_mcu_chunk)
         self.mcu_worker.error.connect(self._on_mcu_error)
         self.eeg_plot.start_live()
         self.mcu_worker.start()
@@ -359,9 +359,9 @@ class Dashboard(QtWidgets.QWidget):
             self.mcu_worker = None
 
 
-    # SLOT: called for each preprocessed voltage sample from the MCU worker
-    def _on_mcu_sample(self, voltage: float):
-        self.eeg_plot.append_sample(voltage)
+    # SLOT: called for each chunk of preprocessed voltage samples from the MCU worker
+    def _on_mcu_chunk(self, chunk):
+        self.eeg_plot.append_chunk(chunk)
 
 
     # SLOT: called when the MCU worker encounters a serial error
@@ -494,8 +494,7 @@ class Dashboard(QtWidgets.QWidget):
         # if self.mcu_worker is not None and self.mcu_worker.isRunning():
         self._stop_mcu_worker()
         self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
-        self.mcu_worker.sample_ready.connect(self._on_mcu_sample)
-        
+        self.mcu_worker.chunk_ready.connect(self._on_mcu_chunk)
         self.mcu_worker.error.connect(self._on_mcu_error)
         self.eeg_plot.start_live()
         print("Restarting? should be with stage ", selected_stage)

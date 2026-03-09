@@ -25,7 +25,7 @@ class EEGPlot(QtWidgets.QWidget):
         self._live_fs = 256 # adjust for MCU Hz !!!
         self._live_times = np.arange(LIVE_WINDOW) / self._live_fs
         self._live_mode = False
-
+        self._last_redraw = 0.0  # timestamp of last setData call
 
     # --- Offline mode ---
     def update_plot(self, times, data):
@@ -45,12 +45,13 @@ class EEGPlot(QtWidgets.QWidget):
         self.plot_widget.enableAutoRange()
 
 
-    def append_sample(self, voltage: float):
-        """Shift one new sample into the rolling buffer and redraw."""
+    def append_chunk(self, chunk: np.ndarray):
+        """Shift a numpy array of samples into the rolling buffer and redraw once."""
         if not self._live_mode:
             return
-        self._live_buffer = np.roll(self._live_buffer, -1)
-        self._live_buffer[-1] = voltage
+        n = len(chunk)
+        self._live_buffer = np.roll(self._live_buffer, -n)
+        self._live_buffer[-n:] = chunk
         self.curve.setData(self._live_times, self._live_buffer)
 
 

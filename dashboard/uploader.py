@@ -84,6 +84,7 @@ class DatasetUploader(QtWidgets.QWidget):
         self.status_label.setText(f"Status: Processing and uploading dataset… ({self.curr_upload}/{self.total_uploads})")
         self.transfer_worker = DatasetTransferWorker(path)
         self.transfer_worker.finished.connect(self.upload_finished)
+        self.transfer_worker.error.connect(self.upload_error)
         self.transfer_worker.start()
 
 
@@ -91,6 +92,13 @@ class DatasetUploader(QtWidgets.QWidget):
     def upload_finished(self):
         self.curr_upload += 1
         self.next_upload()
+
+
+
+    def upload_error(self, message: str):
+        self.status_label.setText(f"Status: Error — {message}")
+        self.load_button.setEnabled(True)
+        QtWidgets.QMessageBox.critical(self, "Upload Failed", message)
 
 
 
