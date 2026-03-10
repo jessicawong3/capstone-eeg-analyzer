@@ -57,20 +57,13 @@ def parse_mcu_sample(raw_token: str):
     # 2. Cast to uint16
     # 3. Undo quantization
     # 4. Divide by 1000 to get volts
-    print("Parsing raw token")
 
     try:
-        # 1. parse to integer
-        if raw_token.isdigit():
-            raw_int = int(raw_token.replace("\r", "").strip())
-            # print(f"Parsed raw token '{raw_token}' to int: {raw_int}")
-        else:
-            # print(f"Raw token '{raw_token}' is not a digit.")
-            return None
+        # 1. parse to integer — strip whitespace/carriage returns then convert
+        raw_int = int(raw_token.strip())
 
         # 2. cast to uint16
         as_uint16 = np.uint16(raw_int)
-        # print(f"Cast raw token '{raw_token}' to uint16: {as_uint16}")
 
         # 3. undo quantization
         dequantized = signed_fp_to_decimal_float(1, 14, as_uint16)
@@ -78,10 +71,8 @@ def parse_mcu_sample(raw_token: str):
         # 4. divide by 1000 to get volts
         voltage = dequantized / 1000.0
 
-        # print(f"Parsed token '{raw_token}' to voltage: {voltage} V")
         return voltage
     except (ValueError, TypeError):
-        print(f"Failed to parse token '{raw_token}'")
         return None
 
 

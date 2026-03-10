@@ -36,7 +36,7 @@ class EEGPlot(QtWidgets.QWidget):
 
 
     # --- Synthetic mode ---
-    def start_synthetic(self, fs: int = 1000):
+    def start_synthetic(self, fs: int = 256):
         """Switch to rolling-window live display at the given sample rate."""
         self._synthetic_fs = fs
         self._synthetic_times = np.arange(LIVE_WINDOW) / fs

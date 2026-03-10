@@ -465,7 +465,7 @@ class Dashboard(QtWidgets.QWidget):
         else:
             self.load_button.hide()
             self.stage_container.show()
-            self._start_synthetic()
+            # self._start_synthetic()
 
 
 
@@ -507,18 +507,16 @@ class Dashboard(QtWidgets.QWidget):
         self.mcu_worker.chunk_ready.connect(self._on_mcu_chunk)
         self.mcu_worker.error.connect(self._on_mcu_error)
         self.eeg_plot.start_synthetic()
-        print("Restarting? should be with stage ", selected_stage)
         self.mcu_worker.start()
 
 
     # FUNCTION: gets the selected stage
     def _get_selected_stage(self):
-        # Return text of whichever stage button is currently checked
         for btn in self.stage_buttons:
             if btn.isChecked():
                 print("get_selected_stage: ", btn.text())
                 return btn.text()
-        # return "Awake"  # fallback
+        return "Awake"  # fallback
 
 
     # FUNCTION: turn mcu offline

@@ -63,6 +63,7 @@ class McuWorker(QThread):
 
     def run(self):
         self._running = True
+        print("MCU Worker started with stage:", self.stage)
 
         if MOCK_MCU:
             while self._running and self.stage != "Offline":
