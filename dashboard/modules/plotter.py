@@ -26,6 +26,7 @@ class EEGPlot(QtWidgets.QWidget):
         self._synthetic_times = np.arange(LIVE_WINDOW) / self._synthetic_fs
         self._synthetic_mode = False
         self._last_redraw = 0.0  # timestamp of last setData call
+        self._current_stage = None  # Track which stage is currently being displayed
 
     # --- Real Data mode ---
     def update_plot(self, times, data):
@@ -36,13 +37,22 @@ class EEGPlot(QtWidgets.QWidget):
 
 
     # --- Synthetic mode ---
-    def start_synthetic(self, fs: int = 256):
-        """Switch to rolling-window live display at the given sample rate."""
+    def start_synthetic(self, fs: int = 256, stage: str = None):
+        """Switch to rolling-window live display at the given sample rate.
+        
+        If stage is different from the current stage, resets the buffer.
+        If stage is the same, continues with existing buffer.
+        """
+        # Only reset buffer if stage changed or first time
+        if stage != self._current_stage:
+            self._synthetic_buffer = np.full(LIVE_WINDOW, np.nan)  # Initialize with NaN to hide zeros
+            self._current_stage = stage
+        
         self._synthetic_fs = fs
         self._synthetic_times = np.arange(LIVE_WINDOW) / fs
-        self._synthetic_buffer = np.zeros(LIVE_WINDOW)
         self._synthetic_mode = True
         self.plot_widget.enableAutoRange()
+        self.curve.setData(self._synthetic_times, self._synthetic_buffer)  # Clear display
 
 
     def append_chunk(self, chunk: np.ndarray):

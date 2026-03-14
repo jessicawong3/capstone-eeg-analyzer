@@ -1,8 +1,9 @@
 from PyQt5.QtCore import QThread, pyqtSignal
 import numpy as np
-from modules.mcu_transfer_pipeline import open_serial, send_stage_command, read_one_sample, mock_read_one_sample
+from modules.mcu_transfer_pipeline import open_serial, send_stage_command, read_one_sample, mock_read_one_sample, _current_mock_stage
 from modules.preprocess import parse_mcu_sample
 from modules.pynq_transfer_pipeline import preprocess_and_send
+import modules.mcu_transfer_pipeline as mcu_pipeline
 
 MOCK_MCU = True
 
@@ -44,6 +45,11 @@ class McuWorker(QThread):
         self.stage = stage
         self._running = False
 
+    def set_stage(self, stage: str):
+        """Change the current stage without stopping the worker."""
+        self.stage = stage
+        print(f"MCU Worker stage changed to: {stage}")
+
     def _collect_chunk(self, read_fn):
         """Read CHUNK_SIZE valid voltage samples using the given read function.
         Returns a numpy float32 array, or None if stopped mid-chunk."""
@@ -67,6 +73,9 @@ class McuWorker(QThread):
 
         if MOCK_MCU:
             while self._running and self.stage != "Offline":
+                # Keep mock stage in sync with current worker stage
+                mcu_pipeline._current_mock_stage = self.stage
+                
                 chunk = self._collect_chunk(mock_read_one_sample)
                 if chunk is not None:
                     self.chunk_ready.emit(chunk)

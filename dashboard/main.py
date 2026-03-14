@@ -127,12 +127,19 @@ class Dashboard(QtWidgets.QWidget):
         left_size_policy.setVerticalStretch(0)
         left_panel_widget.setSizePolicy(left_size_policy)
 
+        # Card for signal label (file name for real data mode, sleep stage for synthetic mode)
+        # self.signal_label = QtWidgets.QLabel("")
+        # self.signal_label.setObjectName("SignalLabel")
+        signal_card = self.make_card("Signal", None)
+        # self.signal_card.setObjectName("SignalCard")
+
         # Cards for EEG and wavelet plots
         eeg_card = self.make_card("EEG Signal", self.eeg_plot)
         eeg_card.setMaximumHeight(400)
         wavelet_card = self.make_card("Wavelet Coefficients", self.wavelet_plot)
         wavelet_card.setMaximumHeight(400)
 
+        left_panel.addWidget(signal_card)
         left_panel.addWidget(eeg_card)
         left_panel.addWidget(wavelet_card)
         left_panel.addStretch()  # prevent cards from expanding too much
@@ -350,7 +357,7 @@ class Dashboard(QtWidgets.QWidget):
         self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
         self.mcu_worker.chunk_ready.connect(self._on_mcu_chunk)
         self.mcu_worker.error.connect(self._on_mcu_error)
-        self.eeg_plot.start_synthetic()
+        self.eeg_plot.start_synthetic(stage=selected_stage)
         self.mcu_worker.start()
 
 
@@ -500,14 +507,12 @@ class Dashboard(QtWidgets.QWidget):
         selected_stage = clicked.text()
         print("Selected Stage:", selected_stage)
 
-        # If the MCU worker is already running, restart it with the new stage
-        # if self.mcu_worker is not None and self.mcu_worker.isRunning():
-        self._stop_mcu_worker()
-        self.mcu_worker = McuWorker(port=self.mcu_port, stage=selected_stage)
-        self.mcu_worker.chunk_ready.connect(self._on_mcu_chunk)
-        self.mcu_worker.error.connect(self._on_mcu_error)
-        self.eeg_plot.start_synthetic()
-        self.mcu_worker.start()
+        # If the MCU worker is already running, just swap the stage without restarting
+        if self.mcu_worker is not None and self.mcu_worker.isRunning():
+            # Just update the stage in the worker without stopping/restarting
+            self.mcu_worker.set_stage(selected_stage)
+            # Update the plot's current stage so it knows we're still in the same session
+            self.eeg_plot._current_stage = selected_stage 
 
 
     # FUNCTION: gets the selected stage
@@ -516,7 +521,7 @@ class Dashboard(QtWidgets.QWidget):
             if btn.isChecked():
                 print("get_selected_stage: ", btn.text())
                 return btn.text()
-        return "Awake"  # fallback
+        return "Offline"  # fallback
 
 
     # FUNCTION: turn mcu offline
