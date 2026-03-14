@@ -241,6 +241,7 @@ class Dashboard(QtWidgets.QWidget):
             self.eeg_times = times
             self.eeg_plot.update_plot(times, data)
             self.wavelet_plot.load_signal(data)
+            self._real_data_rolling_active = False  # Reset flag for new data
         except Exception as e:
             QtWidgets.QMessageBox.critical(
                 self, "EEG Loading Error", 
@@ -337,15 +338,47 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: starts real data mode
     def _start_real_data(self):
-        self.current_time = 0
-        self.pred_table.setRowCount(0)
-        self.prediction_history.clear()
+        # Check if data has been loaded
+        if self.eeg_data is None or self.eeg_times is None:
+            QtWidgets.QMessageBox.warning(
+                self, "No Data Loaded",
+                "Please load EEG data first before starting playback."
+            )
+            return
+
+        # only restart if not already running
+        if not self._real_data_rolling_active:
+            self.current_time = 0
+            self.pred_table.setRowCount(0)
+            self.prediction_history.clear()
+
+        # Start rolling playback of real data
+        # Determine sampling frequency from the data
+        if len(self.eeg_times) > 1:
+            fs = 1.0 / (self.eeg_times[1] - self.eeg_times[0])
+        else:
+            fs = 256  # fallback
+        
+        # Check if we're resuming (plot is already in rolling mode) or starting fresh
+        resume = getattr(self, '_real_data_rolling_active', False)
+        self.eeg_plot.start_real_data_rolling(self.eeg_times, self.eeg_data, int(fs), resume=resume)
+        self._real_data_rolling_active = True
+        
+        # Start timer to advance through data (same rate as synthetic mode)
+        # Each timer tick advances by CHUNK_SIZE samples at the given fs
+        from modules.plotter import LIVE_WINDOW
+        chunk_size = 32  # Same as CHUNK_SIZE in workers
+        interval_ms = int((chunk_size / fs) * 1000)
+        self.real_data_timer = QtCore.QTimer()
+        self.real_data_timer.timeout.connect(self.advance_real_data_plot)
+        self.real_data_timer.start(interval_ms)
+        
+        # Also start the prediction timer
         self.timer.start(2000)  # mock model update every 2 s
 
 
     # FUNCTION: starts synthetic mode
     def _start_synthetic(self):
-        # Open the serial port and start streaming MCU samples
 
         # Stop any existing worker
         self._stop_mcu_worker()
@@ -365,6 +398,10 @@ class Dashboard(QtWidgets.QWidget):
     def stop_predictions(self):
         self.timer.stop()
         self._stop_mcu_worker()
+        # Also stop real data timer if it exists
+        if hasattr(self, 'real_data_timer'):
+            self.real_data_timer.stop()
+        self.eeg_plot.stop_synthetic()
         self.eeg_plot.stop_synthetic()
 
 
@@ -380,6 +417,15 @@ class Dashboard(QtWidgets.QWidget):
     def _on_mcu_chunk(self, chunk):
         self.eeg_plot.append_chunk(chunk)
 
+    # SLOT: called each timer tick to advance real data playback
+    def advance_real_data_plot(self):
+        """Advance the rolling plot with the next chunk of real data."""
+        chunk_size = 32  # Same as CHUNK_SIZE in workers
+        more_data = self.eeg_plot.append_real_data_chunk(chunk_size)
+        
+        if not more_data:
+            # Reached end of data
+            self.stop_predictions()
 
     # SLOT: called when the MCU worker encounters a serial error
     def _on_mcu_error(self, message: str):
@@ -463,6 +509,17 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: updates layout based on mode (real data / synthetic)
     def update_mode(self):
+        # Stop any running playback/predictions
+        self.stop_predictions()
+        
+        # Clear the prediction table and history
+        self.pred_table.setRowCount(0)
+        self.prediction_history.clear()
+        self.current_pred_value.setText("")
+        
+        # Reset the real data rolling flag
+        self._real_data_rolling_active = False
+        
         if self.real_data_radio.isChecked():
             self.load_button.show()
             self.stage_container.hide()
@@ -472,7 +529,8 @@ class Dashboard(QtWidgets.QWidget):
         else:
             self.load_button.hide()
             self.stage_container.show()
-            # self._start_synthetic()
+            # Clear the plot when switching to synthetic mode
+            self.eeg_plot.stop_synthetic()
 
 
 

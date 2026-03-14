@@ -27,6 +27,11 @@ class EEGPlot(QtWidgets.QWidget):
         self._synthetic_mode = False
         self._last_redraw = 0.0  # timestamp of last setData call
         self._current_stage = None  # Track which stage is currently being displayed
+        
+        # Real data rolling mode
+        self._real_data_buffer = np.zeros(LIVE_WINDOW)
+        self._real_data_times = np.arange(LIVE_WINDOW) / 256  # will be updated
+        self._real_data_fs = 256  # will be set when data is loaded
 
     # --- Real Data mode ---
     def update_plot(self, times, data):
@@ -34,6 +39,62 @@ class EEGPlot(QtWidgets.QWidget):
         self._synthetic_mode = False
         self.plot_widget.enableAutoRange()
         self.curve.setData(times, data)
+
+    def start_real_data_rolling(self, times: np.ndarray, data: np.ndarray, fs: int = 256, resume: bool = False):
+        """Switch to rolling-window display for real data playback.
+        
+        Args:
+            times: Full array of time values
+            data: Full array of EEG data
+            fs: Sampling frequency in Hz
+            resume: If True, continue from current position. If False, restart from beginning.
+        """
+        self._synthetic_mode = False
+        self._real_data_fs = fs
+        self._real_data_times = np.arange(LIVE_WINDOW) / fs
+        
+        # Store the full data
+        self._full_data = data
+        self._full_times = times
+        
+        # Only reset buffer and index if not resuming
+        if not resume or not hasattr(self, '_data_index'):
+            self._real_data_buffer = np.full(LIVE_WINDOW, np.nan)
+            self._data_index = 0  # Current position in the full dataset
+        
+        self.plot_widget.enableAutoRange()
+        self.curve.setData(self._real_data_times, self._real_data_buffer)
+
+    def append_real_data_chunk(self, chunk_size: int):
+        """Load the next chunk of real data into the rolling buffer.
+        
+        Args:
+            chunk_size: Number of samples to advance
+            
+        Returns:
+            True if more data is available, False if at the end
+        """
+        if not hasattr(self, '_full_data'):
+            return False
+            
+        # Check if we've reached the end
+        if self._data_index >= len(self._full_data):
+            return False
+        
+        # Get the next chunk
+        end_idx = min(self._data_index + chunk_size, len(self._full_data))
+        chunk = self._full_data[self._data_index:end_idx]
+        actual_chunk_size = len(chunk)
+        
+        # Shift buffer and add new data
+        self._real_data_buffer = np.roll(self._real_data_buffer, -actual_chunk_size)
+        self._real_data_buffer[-actual_chunk_size:] = chunk
+        self.curve.setData(self._real_data_times, self._real_data_buffer)
+        
+        self._data_index += actual_chunk_size
+        
+        # Return True if there's more data
+        return self._data_index < len(self._full_data)
 
 
     # --- Synthetic mode ---
