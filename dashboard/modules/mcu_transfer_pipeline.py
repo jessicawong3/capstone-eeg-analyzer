@@ -56,12 +56,12 @@ def read_one_sample(ser: serial.Serial):
     # Read one raw token from the MCU
     # Read until /r and return the token string.
 
-    print("Reading sample?")
+    # print("Reading sample?")
     try:
         line = ser.read_until(b"\r").decode("ascii", errors="ignore").strip()
         # line = ser.readline()
-        print(line)
-        print(f"Type: {type(line)}")
+        # print(line)
+        # print(f"Type: {type(line)}")
         f = open('serial.txt', 'a')
         data = str(line)
         f.write(data)

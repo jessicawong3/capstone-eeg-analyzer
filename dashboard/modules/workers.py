@@ -5,7 +5,7 @@ from modules.preprocess import parse_mcu_sample
 from modules.pynq_transfer_pipeline import preprocess_and_send
 import modules.mcu_transfer_pipeline as mcu_pipeline
 
-MOCK_MCU = True
+MOCK_MCU = False
 
 # Number of samples to collect before emitting one signal to the UI.
 # At 256 Hz, CHUNK_SIZE=32 → ~8 UI updates/sec (plenty smooth, low overhead).
@@ -94,7 +94,20 @@ class McuWorker(QThread):
                 ser.close()
                 return
 
+            # Track the last stage we sent to the MCU
+            last_sent_stage = self.stage
+
             while self._running and self.stage != "Offline":
+                # Check if stage changed and send new command if it did
+                if self.stage != last_sent_stage:
+                    try:
+                        send_stage_command(ser, self.stage)
+                        last_sent_stage = self.stage
+                    except Exception as e:
+                        self.error.emit(f"Could not send stage command: {e}")
+                        ser.close()
+                        return
+                
                 chunk = self._collect_chunk(lambda: read_one_sample(ser))
                 if chunk is not None:
                     self.chunk_ready.emit(chunk)
