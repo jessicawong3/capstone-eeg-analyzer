@@ -1,12 +1,46 @@
 import pandas as pd
 import numpy as np
 import mne
+import os
 
 
 def load_eeg_data(filepath):
     raw = mne.io.read_raw_edf(filepath, preload=True)
     data, times = raw[:1]  # First channel
     return data[0], times
+
+
+# get npy files out of npz and save in specified directory
+def extract_npy_from_npz(npz_path, output_dir=None):
+    if output_dir is None:
+        output_dir = os.path.dirname(npz_path)
+        if not output_dir:
+            output_dir = "."
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    extracted_files = []
+    with np.load(npz_path) as data:
+        for file_name in data.files:
+            output_path = os.path.join(output_dir, f"{file_name}.npy")
+            print(f"Extracting {file_name} from {npz_path} to {output_path}")
+            npy_data = data[file_name]
+            np.save(output_path, npy_data)
+            extracted_files.append(output_path)
+    
+    return extracted_files
+
+
+# TODO: Implement loading of time information
+def load_npy_data(filepath):
+    """Load EEG data from a .npy file"""
+    try:
+        data = np.load(filepath)
+        return data
+    except Exception as e:
+        print(f"Error loading .npy data: {e}")
+        return None
 
 
 def load_hypnogram_data(filepath):

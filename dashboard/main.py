@@ -1,7 +1,7 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import numpy as np
-from modules.data_loader import load_eeg_data, load_hypnogram_data, get_sleep_stage_at_time
+from modules.data_loader import load_eeg_data, load_npy_data, load_hypnogram_data, get_sleep_stage_at_time, extract_npy_from_npz
 from modules.plotter import EEGPlot
 from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
@@ -229,16 +229,23 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: loads EEG data from file
     def load_data(self):
+        # get either an eeg file or an npz (for demo purposes)
         eeg_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open EEG EDF File", "", "EDF Files (*.edf)")
+            self, "Open EEG EDF File", "", "EDF Files (*.edf || *.npz)")
         if not eeg_path:
             return
         
         # Load the EEG data
         try:
-            data, times = load_eeg_data(eeg_path)
-            self.eeg_data = data
-            self.eeg_times = times
+            if eeg_path.endswith(".npz"):
+                # extract_npy_from_npz(eeg_path, "test_data")
+                data, times = load_npy_data(eeg_path)
+                self.eeg_data = data
+                self.eeg_times = times
+            else:
+                data, times = load_eeg_data(eeg_path)
+                self.eeg_data = data
+                self.eeg_times = times
             self.eeg_plot.update_plot(times, data)
             self.wavelet_plot.load_signal(data)
             self._real_data_rolling_active = False  # Reset flag for new data
