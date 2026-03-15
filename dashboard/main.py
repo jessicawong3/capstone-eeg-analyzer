@@ -231,15 +231,17 @@ class Dashboard(QtWidgets.QWidget):
     def load_data(self):
         # get either an eeg file or an npz (for demo purposes)
         eeg_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open EEG EDF File", "", "EDF Files (*.edf || *.npz)")
+            self, "Open EEG EDF File", "", "EDF Files (*.edf || *.npz || *.npy)")
         if not eeg_path:
             return
         
         # Load the EEG data
         try:
             if eeg_path.endswith(".npz"):
-                # extract_npy_from_npz(eeg_path, "test_data")
+                extract_npy_from_npz(eeg_path, "test_data")
+            elif eeg_path.endswith(".npy"):
                 data, times = load_npy_data(eeg_path)
+                print(f"Loaded EEG data with shape {data.shape} and times shape {times.shape}")
                 self.eeg_data = data
                 self.eeg_times = times
             else:
@@ -286,7 +288,7 @@ class Dashboard(QtWidgets.QWidget):
     # FUNCTION: loads hypnogram data from file (called from load_data)
     def load_hypnogram_dialog(self):
         hypno_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open Hypnogram EDF File", "", "EDF Files (*.edf)")
+            self, "Open Hypnogram EDF File", "", "EDF Files (*.edf || *.npz || *.npy)")
         if not hypno_path:
             return
         

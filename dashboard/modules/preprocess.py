@@ -11,16 +11,16 @@ def preprocess_edf(input_path, output_path):
     raw = mne.io.read_raw_edf(input_path, preload=True, verbose=False)
     eeg_channel = "EEG Fpz-Cz"
 
-    # Resample to 256 Hz  # TODO: Reorder/redo this elsewhere if necessary
+    # Resample to 256 Hz
     raw.resample(sfreq=TARGET_FS, npad='auto', verbose=False)
     raw.filter(l_freq=0.5, h_freq=None, picks=[eeg_channel], verbose=False)
 
     data = raw.copy().pick_channels([eeg_channel]).get_data()[0]  # Get the data for the selected channel
 
-    # TODO: Jenny's preprocessing steps here
+    # preprocessing steps
     selected_channel_data = np.array(data)  
 
-    # TODO: Simran's quantizations steps here with x1000 data
+    # quantizations steps with x1000 data
     quantized = quantization_function(1, 14, selected_channel_data * 1000)
 
     # Export quantized data

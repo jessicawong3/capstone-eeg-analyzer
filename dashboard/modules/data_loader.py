@@ -32,15 +32,29 @@ def extract_npy_from_npz(npz_path, output_dir=None):
     return extracted_files
 
 
-# TODO: Implement loading of time information
+# Gets voltage data and times from a .npy file
 def load_npy_data(filepath):
     """Load EEG data from a .npy file"""
     try:
         data = np.load(filepath)
-        return data
+        print(f"Loaded data from {filepath} with shape {data.shape}")
+        
+        # Flatten the segmented data so it can be plotted continuously
+        # Data is in shape (n_epochs, samples_per_epoch)
+        voltages = data.flatten()
+
+        # 256 Hz sample rate and 30s epochs (256 * 30)
+        # Calculate time vector
+        samples_per_epoch = data.shape[1] if len(data.shape) > 1 else len(data)
+        fs = samples_per_epoch / 30.0 if len(data.shape) > 1 else 100.0
+        
+        times = np.arange(len(voltages)) / fs
+
+        return voltages, times
+
     except Exception as e:
         print(f"Error loading .npy data: {e}")
-        return None
+        return None, None
 
 
 def load_hypnogram_data(filepath):

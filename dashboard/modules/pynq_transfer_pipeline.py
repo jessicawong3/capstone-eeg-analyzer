@@ -25,7 +25,15 @@ def preprocess_and_send(edf_path):
         f"{edf_path.stem}_processed.bin"
     )
 
-    processed_path = preprocess_edf(edf_path, bin_path)
+    # if .edf file
+    if edf_path.suffix == ".edf":
+        # process edf
+        processed_path = preprocess_edf(edf_path, bin_path)
+    elif edf_path.suffix == ".npy":
+        # send npy file in bin_path
+        processed_path = edf_path
+    else:
+        raise ValueError("Unsupported file type")
 
     scp_to_device(
         local_path=processed_path,
