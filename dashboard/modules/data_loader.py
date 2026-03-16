@@ -33,11 +33,12 @@ def extract_npy_from_npz(npz_path, output_dir=None):
 
 
 # Gets voltage data and times from a .npy file
-def load_npy_data(filepath):
+def load_npy_eeg_data(filepath):
     """Load EEG data from a .npy file"""
     try:
         data = np.load(filepath)
         print(f"Loaded data from {filepath} with shape {data.shape}")
+        print(f"Data: {data}")
         
         # Flatten the segmented data so it can be plotted continuously
         # Data is in shape (n_epochs, samples_per_epoch)
@@ -98,6 +99,43 @@ def load_hypnogram_data(filepath):
         
     except Exception as e:
         print(f"Error loading hypnogram: {e}")
+        return None, None, None
+    
+
+# Gets label data and times from a .npy file
+def load_npy_hypnogram_data(filepath):
+    """Load label data from a .npy file and return in the same format as load_hypnogram_data"""
+    try:
+        data = np.load(filepath)
+        print(f"Loaded data from {filepath} with shape {data.shape}")
+        
+        # Flatten the segmented data for consistency
+        labels = data.flatten()
+
+        # label data coming in as 0-4, 0=Wake, 1=N1, 2=N2, 3=N3, 4=REM
+        label_map = {
+            0: "Awake",
+            1: "N1",
+            2: "N2",
+            3: "N3",
+            4: "REM"
+        }
+        sleep_stages = np.array([label_map.get(int(label), "Unknown") for label in labels])
+
+        # Each value in labels is a stage for a 30s epoch
+        # Create onset_times (start of each epoch in seconds)
+        onset_times = np.arange(len(sleep_stages)) * 30
+        
+        # Each epoch has a duration of 30 seconds
+        durations = np.full(len(sleep_stages), 30)
+
+        print(f"Sleep stages: {sleep_stages}")
+        print(f"Onset times: {onset_times}")
+        print(f"Durations: {durations}")
+        return onset_times, sleep_stages, durations
+
+    except Exception as e:
+        print(f"Error loading .npy hypnogram data: {e}")
         return None, None, None
 
 

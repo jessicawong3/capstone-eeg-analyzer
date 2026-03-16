@@ -1,7 +1,7 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import numpy as np
-from modules.data_loader import load_eeg_data, load_npy_data, load_hypnogram_data, get_sleep_stage_at_time, extract_npy_from_npz
+from modules.data_loader import load_eeg_data, load_npy_eeg_data, load_hypnogram_data, load_npy_hypnogram_data, get_sleep_stage_at_time, extract_npy_from_npz
 from modules.plotter import EEGPlot
 from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
@@ -240,7 +240,7 @@ class Dashboard(QtWidgets.QWidget):
             if eeg_path.endswith(".npz"):
                 extract_npy_from_npz(eeg_path, "test_data")
             elif eeg_path.endswith(".npy"):
-                data, times = load_npy_data(eeg_path)
+                data, times = load_npy_eeg_data(eeg_path)
                 print(f"Loaded EEG data with shape {data.shape} and times shape {times.shape}")
                 self.eeg_data = data
                 self.eeg_times = times
@@ -294,7 +294,11 @@ class Dashboard(QtWidgets.QWidget):
         
         # Load hypnogram data
         try:
-            onset_times, sleep_stages, durations = load_hypnogram_data(hypno_path)
+            if hypno_path.endswith(".npy"):
+                onset_times, sleep_stages, durations = load_npy_hypnogram_data(hypno_path)
+            else:
+                onset_times, sleep_stages, durations = load_hypnogram_data(hypno_path)
+
             if onset_times is not None:
                 self.hypno_data = (onset_times, sleep_stages, durations)
                 print(f"Loaded {len(sleep_stages)} sleep stage annotations")
