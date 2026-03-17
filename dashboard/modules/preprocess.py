@@ -127,9 +127,11 @@ def parse_npy_sample(npy_voltage):
   except (ValueError, TypeError):
       return None
   
+
+
 def get_graph_data_from_data(data):
-    """extract 1 data point of eeg data from every 6 seconds windows"""
-    keep_idx = 32*[0, 6*32, 12*32, 18*32, 24*32]
+    """extract 1 data point of eeg data from every 5 seconds windows"""
+    keep_idx = [0, 5*32, 10*32, 15*32, 20*32, 25*32]
     return data[:, keep_idx]
     
 
