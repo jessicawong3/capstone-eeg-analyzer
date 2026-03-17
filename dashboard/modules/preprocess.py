@@ -29,7 +29,6 @@ def preprocess_edf(input_path, output_path):
     return output_path
 
 
-# TODO: Replace with Simran's quantization function
 # want to call like quantization_function(int_bits=1, fraction_bits=14, signed_dec=unquntized_data)
 def quantization_function(int_bits, fraction_bits, signed_dec):
     # scale it to get the quantized number
@@ -94,6 +93,35 @@ def signed_fp_to_decimal_float(int_bits, fraction_bits, signed_fp_num):
 
   return to_return
   # RETURNS NP.FLOAT64 TYPE
+
+
+
+# FOR NPY DEMO FILES
+def parse_npy_sample(npy_voltage):
+  # Convert a single raw npy voltage to a real voltage value.
+  # 1. Cast to uint16
+  # 2. Undo quantization
+  # 3. Divide by 1000 to get volts
+
+  try:
+
+      # 1. cast to uint16
+      as_uint16 = np.uint16(npy_voltage)
+
+      # 2. undo quantization
+      dequantized = signed_fp_to_decimal_float(1, 14, as_uint16)
+
+      # 3. divide by 1000 to get volts
+      voltage = dequantized / 1000.0
+
+      print(f"Parsed voltage: {voltage}")
+
+      return voltage
+  except (ValueError, TypeError):
+      return None
+    
+
+
 
 # #   food for thought: code to read labels
 # def map_stage(stage):
