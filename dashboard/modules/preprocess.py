@@ -23,8 +23,15 @@ def preprocess_edf(input_path, output_path):
     # quantizations steps with x1000 data
     quantized = quantization_function(1, 14, selected_channel_data * 1000)
 
-    # Export quantized data
-    quantized.tofile(output_path)
+    # Split into 30-second epochs (256 Hz * 30 seconds = 7680 samples per epoch)
+    samples_per_epoch = 256 * 30  # 7680 samples
+    n_epochs = len(quantized) // samples_per_epoch
+    
+    # Reshape to (n_epochs, samples_per_epoch) - same format as quantized_epochs.npy
+    quantized_epochs = quantized[:n_epochs * samples_per_epoch].reshape(n_epochs, samples_per_epoch)
+
+    # Export quantized epochs as .npy file
+    np.save(output_path, quantized_epochs)
 
     return output_path
 
