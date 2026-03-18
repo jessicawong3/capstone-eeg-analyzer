@@ -34,12 +34,13 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
 
 
         # Y-axis ticks (levels)
-        ticks = [(i, f"L{i+1}") for i in range(n_levels)]
+        dwt_labels = ["d3", "d4H", "d4L", "d5", "d6", "d7", "d8"]
+        ticks = [(i, dwt_labels[i]) for i in range(n_levels)]
         self.plot.getAxis("left").setTicks([ticks])
 
         self.plot.setLimits(
             xMin=0, xMax=window_len,
-            yMin=0, yMax=n_levels
+            yMin=-1, yMax=n_levels
         )
 
 
@@ -69,25 +70,63 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
         )
 
 
-
-    def load_signal(self, signal, wavelet="db4", level=6):
+    def update_from_fpga(self, fpga_coefficients):
         """
-        signal: 1D EEG array (same as EEGPlot)
+        Update wavelet plot with pre-computed DWT coefficients from FPGA.
+        Coefficients are already computed, just need to be displayed.
+        
+        fpga_coefficients: 1D array of 6 DWT coefficient values
+                          (one from each 5-second window)
+        """
+        
+        # Shift left (time scroll) by 1 column
+        self.coeff_img = np.roll(self.coeff_img, -1, axis=1)
+        
+        # Insert new column of coefficients on the right
+        # If we have 6 coefficients and n_levels, map them accordingly
+        # Assuming fpga_coefficients contains one value per level
+        n_coeffs = min(len(fpga_coefficients), self.n_levels)
+        for i in range(n_coeffs):
+            self.coeff_img[i, -1] = abs(fpga_coefficients[i])
+        
+        # Update image with the scrolled display
+        self.img.setImage(
+            self.coeff_img,
+            autoLevels=True
+        )
+
+
+
+    def load_signal(self, signal, wavelet="db4", level=6, precomputed=False):
+        """
+        signal: 1D EEG array (for local DWT computation) OR pre-computed DWT coefficients from FPGA
+        precomputed: If True, signal is already DWT coefficients (shape n_levels x n_time)
+                     If False, signal is raw EEG data and we compute DWT
         """
 
-        # Compute DWT (real data mode)
-        coeffs = pywt.wavedec(signal, wavelet, level=level)
+        if precomputed:
+            # Signal is already DWT coefficients, just reshape and display
+            # Reshape from flat array to (n_levels, n_time)
+            n_levels = self.n_levels
+            n_time = len(signal) // n_levels if len(signal) % n_levels == 0 else len(signal)
+            
+            img = signal[:n_levels * n_time].reshape(n_levels, n_time)
+            print(f"Using pre-computed DWT coefficients: {img.shape}")
+        else:
+            # Compute DWT from raw signal
+            # Compute DWT (real data mode)
+            coeffs = pywt.wavedec(signal, wavelet, level=level)
 
-        # coeffs = [A6, D6, D5, ..., D1]
-        details = coeffs[1:]  # drop approximation
+            # coeffs = [A6, D6, D5, ..., D1]
+            details = coeffs[1:]  # drop approximation
 
-        n_levels = len(details)
-        n_time = min(len(d) for d in details)
+            n_levels = len(details)
+            n_time = min(len(d) for d in details)
 
-        img = np.zeros((n_levels, n_time))
+            img = np.zeros((n_levels, n_time))
 
-        for i, d in enumerate(details):
-            img[i, :] = np.log10(np.abs(d[:n_time]) + 1e-6)
+            for i, d in enumerate(details):
+                img[i, :] = np.log10(np.abs(d[:n_time]) + 1e-6)
 
         self.coeff_img = img
         self.img.setImage(img, autoLevels=True)
