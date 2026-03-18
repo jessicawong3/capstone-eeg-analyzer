@@ -21,22 +21,23 @@ def preprocess_edf(input_path, output_path):
     selected_channel_data = np.array(data)  
 
     # quantizations steps with x1000 data
-    quantized = quantization_function(1, 14, selected_channel_data * 1000)
+    #quantized = quantization_function(1, 14, selected_channel_data * 1000)
 
     # Split into 30-second epochs (256 Hz * 30 seconds = 7680 samples per epoch)
     samples_per_epoch = 256 * 30  # 7680 samples
-    n_epochs = len(quantized) // samples_per_epoch
+    n_epochs = len(selected_channel_data) // samples_per_epoch
     
     # Reshape to (n_epochs, samples_per_epoch) - same format as quantized_epochs.npy
-    quantized_epochs = quantized[:n_epochs * samples_per_epoch].reshape(n_epochs, samples_per_epoch)
+    channel_epochs = selected_channel_data[:n_epochs * samples_per_epoch].reshape(n_epochs, samples_per_epoch)
 
     # Export quantized epochs as .npy file
-    np.save(output_path, quantized_epochs)
+    np.save(output_path, channel_epochs)  # Save the raw epochs; quantization done on the FPGA side
 
     return output_path
 
 
 # want to call like quantization_function(int_bits=1, fraction_bits=14, signed_dec=unquntized_data)
+#MIGHT HAVE TO CHANGE IF JEREMY'S FPGA USES A DIFFERENT QUANTIZATION SCHEME
 def quantization_function(int_bits, fraction_bits, signed_dec):
     # scale it to get the quantized number
     signed_dec = np.asarray(signed_dec, dtype=np.float64)
@@ -83,6 +84,7 @@ def parse_mcu_sample(raw_token: str):
 
 
 # Unquantization function
+#MIGHT HAVE TO CHANGE TO MATCH JEREMY'S FPGA 
 def signed_fp_to_decimal_float(int_bits, fraction_bits, signed_fp_num):
   # this only works if the fp number is 16 bits. I'm going to type cast it to be sure it is.
   num_16_int = np.uint16(signed_fp_num)
