@@ -43,12 +43,12 @@ def load_npy_eeg_data(filepath):
         # Flatten the segmented data so it can be plotted continuously
         # Data is in shape (n_epochs, samples_per_epoch)
         voltages = data.flatten()
-        print(f"Flattened data (quantized): {voltages[:10]}...")
+        print(f"Flattened data: {voltages[:10]}...")
 
         # voltages are in quantized format - use parse_npy_sample to convert
         # Apply parse_npy_sample to each voltage to undo quantization
-        voltages = np.array([parse_npy_sample(v) for v in voltages], dtype=np.float32)
-        print(f"Flattened data (dequantized): {voltages[:10]}...")
+        # voltages = np.array([parse_npy_sample(v) for v in voltages], dtype=np.float32)
+        # print(f"Flattened data (dequantized): {voltages[:10]}...")
 
         # 256 Hz sample rate and 30s epochs (256 * 30)
         # Calculate time vector
