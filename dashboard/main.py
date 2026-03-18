@@ -212,6 +212,11 @@ class Dashboard(QtWidgets.QWidget):
         self.timer.timeout.connect(self.update_prediction)
         self.model = MockEEGModel(latency=0.2)
         
+        # --- TIMER FOR WAVELET PLOT UPDATES FROM FPGA QUEUE ---
+        self.wavelet_update_timer = QtCore.QTimer()
+        self.wavelet_update_timer.timeout.connect(self._process_wavelet_queue)
+        self.wavelet_update_timer.setInterval(5000)  # Update every 5000ms to match ~0.2 Hz display rate
+
         # --- DATA STORAGE ---
         self.hypno_data = None
         self.eeg_data = None
@@ -355,8 +360,10 @@ class Dashboard(QtWidgets.QWidget):
         self.fpga_playback_active = True
         print("FPGA playback enabled")
         
-        # Start wavelet plot
-        # If we have buffered FPGA data, use oldest entry first
+        # Start wavelet update timer to consume queue at steady rate
+        self.wavelet_update_timer.start()
+        
+        # Start wavelet plot - display any buffered FPGA data
         if self.fpga_coefficient_queue:
             coefficients = self.fpga_coefficient_queue.popleft()
             print(f"Using buffered FPGA coefficients from queue. Queue size: {len(self.fpga_coefficient_queue)}")
@@ -409,7 +416,7 @@ class Dashboard(QtWidgets.QWidget):
         self.real_data_timer.start(interval_ms)
         
         # Also start the prediction timer
-        self.timer.start(2000)  # mock model update every 2 s
+        self.timer.start(5000)  # mock model update every 5 s
 
 
     # FUNCTION: starts synthetic mode
@@ -434,6 +441,9 @@ class Dashboard(QtWidgets.QWidget):
         # Disable FPGA playback
         self.fpga_playback_active = False
         print("FPGA playback disabled")
+        
+        # Stop wavelet update timer
+        self.wavelet_update_timer.stop()
         
         self.timer.stop()
         self._stop_mcu_worker()
@@ -659,27 +669,15 @@ class Dashboard(QtWidgets.QWidget):
         # Extract 1 data point from every 5-second window from the full 30-second buffer
         # eeg_array shape: (7, 960) - full 30-second epochs
         # get_graph_data_from_data returns: (7, 6) - 6 timepoints per epoch
-        extracted_eeg = get_graph_data_from_data(eeg_array)
-        print(f"Extracted EEG shape: {extracted_eeg.shape}")
-        
-        # result_array contains pre-computed DWT coefficients from FPGA
-        # Shape: (1, 6) - 6 coefficients (one per 5-second window)
-        fpga_coefficients = result_array.flatten()  # (6,)
-        print(f"FPGA coefficients: {fpga_coefficients.shape}")
+        fpga_coefficients = get_graph_data_from_data(eeg_array)
+        print(f"FPGA coefficients shape: {fpga_coefficients.shape}")
 
         # Add coefficients to queue (FIFO)
-        self.fpga_coefficient_queue.append(fpga_coefficients)
+        # for each timepoint in the 5-second window
+        for i in range(fpga_coefficients.shape[1]):
+            self.fpga_coefficient_queue.append(fpga_coefficients[:, i])
+
         print(f"FPGA coefficients added to queue. Queue size: {len(self.fpga_coefficient_queue)}. Playback active: {self.fpga_playback_active}")
-        
-        # # If playback is active and we have data in queue, consume the oldest entry
-        # if self.fpga_playback_active and self.fpga_coefficient_queue:
-        #     coefficients_to_display = self.fpga_coefficient_queue.popleft()
-        #     print(f"Displaying oldest queued coefficients. Remaining in queue: {len(self.fpga_coefficient_queue)}")
-        #     self.wavelet_plot.update_from_fpga(coefficients_to_display)
-        # elif self.fpga_playback_active and not self.fpga_coefficient_queue:
-        #     # Queue is empty, clear the wavelet plot (no colors)
-        #     print("No coefficients in queue. Clearing wavelet plot.")
-        #     self._clear_wavelet_plot()
 
 
     # FUNCTION: clear the wavelet plot (shows empty / no colors)
@@ -687,6 +685,25 @@ class Dashboard(QtWidgets.QWidget):
         """Clear the wavelet plot by setting all coefficients to zero"""
         empty_coefficients = np.zeros(6)
         self.wavelet_plot.update_from_fpga(empty_coefficients)
+
+
+    # SLOT: called by timer to process wavelet queue at steady rate
+    def _process_wavelet_queue(self):
+        """Process the FPGA coefficient queue at a steady rate without blocking other processes"""
+        if not self.fpga_playback_active:
+            return
+        
+        # If we have data in queue, consume the oldest entry
+        if self.fpga_coefficient_queue:
+            coefficients_to_display = self.fpga_coefficient_queue.popleft()
+            print(f"Displaying queued coefficients. Remaining in queue: {len(self.fpga_coefficient_queue)}")
+            self.wavelet_plot.update_from_fpga(coefficients_to_display)
+        else:
+            # Queue is empty, clear the wavelet plot (no colors)
+            # Only log this occasionally to avoid spam
+            if not hasattr(self, '_queue_empty_logged'):
+                self._queue_empty_logged = True
+                print("No coefficients in queue. Wavelet plot idle.")
 
 
     # SLOT: called when FPGA receiver encounters an error
@@ -722,6 +739,7 @@ class Dashboard(QtWidgets.QWidget):
         
         # Stop timers
         self.timer.stop()
+        self.wavelet_update_timer.stop()
         if hasattr(self, 'real_data_timer'):
             self.real_data_timer.stop()
         

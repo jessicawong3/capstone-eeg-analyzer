@@ -4,6 +4,7 @@ from modules.mcu_transfer_pipeline import open_serial, send_stage_command, read_
 from modules.preprocess import parse_mcu_sample
 from modules.pynq_transfer_pipeline import preprocess_and_send
 import modules.mcu_transfer_pipeline as mcu_pipeline
+from modules.tcp.receive import receive_array
 
 MOCK_MCU = False
 
@@ -135,7 +136,6 @@ class FPGAReceiverWorker(QThread):
 
     def run(self):
         """Run the TCP receiver in a background thread."""
-        from modules.tcp.receive import receive_array
         
         self._running = True
         print(f"FPGA Receiver started on {self.host}:{self.port}")

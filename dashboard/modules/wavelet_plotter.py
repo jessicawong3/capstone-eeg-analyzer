@@ -75,19 +75,26 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
         Update wavelet plot with pre-computed DWT coefficients from FPGA.
         Coefficients are already computed, just need to be displayed.
         
-        fpga_coefficients: 1D array of 6 DWT coefficient values
-                          (one from each 5-second window)
+        fpga_coefficients: 2D array of shape (n_levels, 6)
+                          - n_levels rows (one per DWT level d3-d8)
+                          - 6 columns (one data point per 5-second window in 30-second epoch)
         """
         
-        # Shift left (time scroll) by 1 column
-        self.coeff_img = np.roll(self.coeff_img, -1, axis=1)
+        # Handle both 1D and 2D input for flexibility
+        if fpga_coefficients.ndim == 1:
+            # If 1D array with 6 elements, treat as single time point
+            fpga_coefficients = fpga_coefficients.reshape(-1, 1)
         
-        # Insert new column of coefficients on the right
-        # If we have 6 coefficients and n_levels, map them accordingly
-        # Assuming fpga_coefficients contains one value per level
-        n_coeffs = min(len(fpga_coefficients), self.n_levels)
-        for i in range(n_coeffs):
-            self.coeff_img[i, -1] = abs(fpga_coefficients[i])
+        # Get the number of new time points to add (should be 6)
+        n_new_points = fpga_coefficients.shape[1]
+        
+        # Shift left by n_new_points columns to make room for new data
+        self.coeff_img = np.roll(self.coeff_img, -n_new_points, axis=1)
+        
+        # Insert the new coefficients on the right side
+        # Map the received coefficients to the plot levels
+        n_levels_to_update = min(fpga_coefficients.shape[0], self.n_levels)
+        self.coeff_img[:n_levels_to_update, -n_new_points:] = np.abs(fpga_coefficients[:n_levels_to_update, :])
         
         # Update image with the scrolled display
         self.img.setImage(
