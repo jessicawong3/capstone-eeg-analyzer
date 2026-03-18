@@ -117,3 +117,42 @@ class McuWorker(QThread):
     def stop(self):
         """Signal the worker loop to exit."""
         self._running = False
+
+
+# Worker thread for receiving FPGA data over TCP
+class FPGAReceiverWorker(QThread):
+
+    # Emits the received EEG array (7, 960) and result array (1, 6)
+    data_ready = pyqtSignal(object, object)
+    # Emits an error string if connection fails
+    error = pyqtSignal(str)
+
+    def __init__(self, host: str = '0.0.0.0', port: int = 9999):
+        super().__init__()
+        self.host = host
+        self.port = port
+        self._running = False
+
+    def run(self):
+        """Run the TCP receiver in a background thread."""
+        from modules.tcp.receive import receive_array
+        
+        self._running = True
+        print(f"FPGA Receiver started on {self.host}:{self.port}")
+
+        def on_data_received(eeg_array, result_array):
+            """Callback when data is received from FPGA"""
+            print(f"Received EEG {eeg_array.shape} and result {result_array.shape}")
+            self.data_ready.emit(eeg_array, result_array)
+
+        try:
+            receive_array(host=self.host, port=self.port, callback=on_data_received)
+        except Exception as e:
+            self.error.emit(f"FPGA Receiver error: {str(e)}")
+
+    def stop(self):
+        """Signal the receiver to stop."""
+        from modules.tcp.receive import stop
+        stop()
+        self._running = False
+

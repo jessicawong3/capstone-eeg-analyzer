@@ -5,7 +5,7 @@ from modules.data_loader import load_eeg_data, load_npy_eeg_data, load_hypnogram
 from modules.plotter import EEGPlot
 from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
-from modules.workers import McuWorker
+from modules.workers import McuWorker, FPGAReceiverWorker
 from modules.mcu_transfer_pipeline import DEFAULT_PORT
 from uploader import UploadProgressDialog
 
@@ -220,6 +220,10 @@ class Dashboard(QtWidgets.QWidget):
         # --- MCU ---
         self.mcu_worker = None
         self.mcu_port = DEFAULT_PORT
+
+        # --- FPGA TCP RECEIVER ---
+        self.fpga_receiver = None
+        self._start_fpga_receiver()
 
 
         # Initialize visibility based on default mode
@@ -595,6 +599,57 @@ class Dashboard(QtWidgets.QWidget):
         return "Offline"  # fallback
 
 
+    # FUNCTION: start FPGA TCP receiver
+    def _start_fpga_receiver(self):
+        """Start the FPGA receiver to listen for incoming data on TCP port"""
+        # Get the user's current IP address
+        local_ip = self._get_local_ip()
+        
+        self.fpga_receiver = FPGAReceiverWorker(host=local_ip, port=9999)
+        self.fpga_receiver.data_ready.connect(self._on_fpga_data_received)
+        self.fpga_receiver.error.connect(self._on_fpga_error)
+        self.fpga_receiver.start()
+        print(f"FPGA Receiver started and listening on {local_ip}:9999...")
+
+
+    # FUNCTION: get the user's local IP address
+    def _get_local_ip(self):
+        """Get the machine's local IP address (non-loopback)"""
+        import socket
+        try:
+            # Connect to a remote server (doesn't need to actually connect)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            print(f"Detected local IP address: {ip}")
+            return ip
+        except Exception as e:
+            print(f"Could not detect local IP ({e}), falling back to 0.0.0.0")
+            return "0.0.0.0"  # fallback to all interfaces
+
+
+    # SLOT: called when FPGA sends data over TCP
+    def _on_fpga_data_received(self, eeg_array, result_array):
+        """Process received EEG data from FPGA"""
+        print(f"Dashboard received EEG {eeg_array.shape} and result {result_array.shape}")
+        
+        # Flatten EEG array for display
+        eeg_flat = eeg_array.flatten()
+        
+        # display this data, update predictions, etc
+        # just log for now
+        print(f"EEG flattened shape: {eeg_flat.shape}")
+        print(f"Result: {result_array}")
+
+
+    # SLOT: called when FPGA receiver encounters an error
+    def _on_fpga_error(self, message: str):
+        """Handle FPGA receiver errors"""
+        print(f"FPGA Receiver Error: {message}")
+        QtWidgets.QMessageBox.critical(self, "FPGA Connection Error", message)
+
+
     # FUNCTION: turn mcu offline
     def _offline_mcu(self):
         self._stop_mcu_worker()
@@ -604,6 +659,27 @@ class Dashboard(QtWidgets.QWidget):
         self.mcu_worker.start()
         self._stop_mcu_worker()
 
+
+    # FUNCTION: clean up resources on window close
+    def closeEvent(self, event):
+        """Handle application shutdown and cleanup"""
+        print("Closing dashboard...")
+        
+        # Stop MCU worker if running
+        if self.mcu_worker is not None:
+            self._stop_mcu_worker()
+        
+        # Stop FPGA receiver if running
+        if self.fpga_receiver is not None:
+            self.fpga_receiver.stop()
+            self.fpga_receiver.wait()
+        
+        # Stop timers
+        self.timer.stop()
+        if hasattr(self, 'real_data_timer'):
+            self.real_data_timer.stop()
+        
+        event.accept()
 
 
 
