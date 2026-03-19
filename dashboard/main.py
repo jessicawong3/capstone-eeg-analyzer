@@ -8,7 +8,7 @@ from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
 from modules.workers import McuWorker, FPGAReceiverWorker
 from modules.mcu_transfer_pipeline import DEFAULT_PORT
-from modules.preprocess import get_graph_data_from_data
+from modules.preprocess import get_graph_data_from_data, get_pred_data_from_data
 from uploader import UploadProgressDialog
 
 
@@ -208,14 +208,19 @@ class Dashboard(QtWidgets.QWidget):
 
 
         # --- TIMER FOR FAKE ML UPDATES ---
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.update_prediction)
-        self.model = MockEEGModel(latency=0.2)
+        # self.timer = QtCore.QTimer()
+        # self.timer.timeout.connect(self.update_prediction)
+        # self.model = MockEEGModel(latency=0.2)
         
         # --- TIMER FOR WAVELET PLOT UPDATES FROM FPGA QUEUE ---
         self.wavelet_update_timer = QtCore.QTimer()
         self.wavelet_update_timer.timeout.connect(self._process_wavelet_queue)
         self.wavelet_update_timer.setInterval(5000)  # Update every 5000ms to match ~0.2 Hz display rate
+
+        # --- TIMER FOR FPGA PREDICTIONS ---
+        self.prediction_timer = QtCore.QTimer()
+        self.prediction_timer.timeout.connect(self._process_prediction_queue)
+        self.prediction_timer.setInterval(5000)  # Update predictions every 5 seconds to match epoch duration
 
         # --- DATA STORAGE ---
         self.hypno_data = None
@@ -232,6 +237,8 @@ class Dashboard(QtWidgets.QWidget):
         self.fpga_receiver = None
         self.fpga_playback_active = False  # Flag to control when wavelet updates
         self.fpga_coefficient_queue = deque()  # Queue to store multiple sets of coefficients (FIFO)
+        self.fpga_prediction_queue = deque()  # Queue to store multiple predictions (FIFO)
+        self.prediction_second_counter = 0  # Counter to track seconds for 5-second prediction intervals
         self._start_fpga_receiver()
 
 
@@ -356,12 +363,21 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: starts the predictions
     def start_predictions(self):
+        # Start EEG plot
+        if self.synthetic_radio.isChecked():
+            self._start_synthetic()
+        else:
+            self._start_real_data()
+
         # Enable FPGA playback before starting
         self.fpga_playback_active = True
         print("FPGA playback enabled")
         
         # Start wavelet update timer to consume queue at steady rate
         self.wavelet_update_timer.start()
+        
+        # Start prediction update timer to consume prediction queue
+        self.prediction_timer.start()
         
         # Start wavelet plot - display any buffered FPGA data
         if self.fpga_coefficient_queue:
@@ -370,12 +386,15 @@ class Dashboard(QtWidgets.QWidget):
             self.wavelet_plot.update_from_fpga(coefficients)
         else:
             print("No buffered FPGA data available. Wavelet plot will remain empty until data arrives.")
-        
-        # Start EEG plot
-        if self.synthetic_radio.isChecked():
-            self._start_synthetic()
+
+        # Start predictions - display any buffered prediction data
+        if self.fpga_prediction_queue:
+            # pred_data = self.prediction_queue.popleft()
+            print(f"Using buffered prediction data from queue. Queue size: {len(self.fpga_prediction_queue)}")
+            self._process_prediction_queue()
         else:
-            self._start_real_data()
+            print("No buffered prediction data available. Log will remain empty until data arrives.")
+
 
 
     # FUNCTION: starts real data mode
@@ -387,12 +406,6 @@ class Dashboard(QtWidgets.QWidget):
                 "Please load EEG data first before starting playback."
             )
             return
-
-        # only restart if not already running
-        if not self._real_data_rolling_active:
-            self.current_time = 0
-            self.pred_table.setRowCount(0)
-            self.prediction_history.clear()
 
         # Start rolling playback of real data
         # Determine sampling frequency from the data
@@ -414,9 +427,6 @@ class Dashboard(QtWidgets.QWidget):
         self.real_data_timer = QtCore.QTimer()
         self.real_data_timer.timeout.connect(self.advance_real_data_plot)
         self.real_data_timer.start(interval_ms)
-        
-        # Also start the prediction timer
-        self.timer.start(5000)  # mock model update every 5 s
 
 
     # FUNCTION: starts synthetic mode
@@ -445,7 +455,10 @@ class Dashboard(QtWidgets.QWidget):
         # Stop wavelet update timer
         self.wavelet_update_timer.stop()
         
-        self.timer.stop()
+        # Stop prediction timer
+        self.prediction_timer.stop()
+        
+        # self.timer.stop() 
         self._stop_mcu_worker()
         # Also stop real data timer if it exists
         if hasattr(self, 'real_data_timer'):
@@ -484,75 +497,59 @@ class Dashboard(QtWidgets.QWidget):
 
 
     # FUNCTION: updates the prediction
-    def update_prediction(self):
-        features = None
-        stage, confs = self.model.predict(features)
-        self.current_pred_value.setText(stage)
+    # def update_prediction(self):
+    #     features = None
+    #     stage, confs = self.model.predict(features)
+    #     self.current_pred_value.setText(stage)
 
-        # Get top confidence for predicted stage
-        top_confidence = confs[stage]
+    #     # Get top confidence for predicted stage
+    #     top_confidence = confs[stage]
 
-        # Format time display
-        hours = int(self.current_time // 3600)
-        minutes = int((self.current_time % 3600) // 60)
-        seconds = int(self.current_time % 60)
-        time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    #     # Format time display
+    #     hours = int(self.current_time // 3600)
+    #     minutes = int((self.current_time % 3600) // 60)
+    #     seconds = int(self.current_time % 60)
+    #     time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-        # Get actual stage from hypnogram if available
-        if self.hypno_data is not None:
-            actual_stage = get_sleep_stage_at_time(self.hypno_data, self.current_time)
-        else:
-            actual_stage = "N/A"
+    #     # Get actual stage from hypnogram if available
+    #     if self.hypno_data is not None:
+    #         actual_stage = get_sleep_stage_at_time(self.hypno_data, self.current_time)
+    #     else:
+    #         actual_stage = "N/A"
 
-        # Add new row to prediction table
-        row_count = self.pred_table.rowCount()
-        self.pred_table.insertRow(row_count)
+    #     # Add new row to prediction table
+    #     row_count = self.pred_table.rowCount()
+    #     self.pred_table.insertRow(row_count)
         
-        # Populate the new row
-        self.pred_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(time_str))
-        self.pred_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(stage))
-        self.pred_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(actual_stage))
-        self.pred_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(f"{top_confidence*100:.1f}%"))
+    #     # Populate the new row
+    #     self.pred_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(time_str))
+    #     self.pred_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(stage))
+    #     self.pred_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(actual_stage))
+    #     self.pred_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(f"{top_confidence*100:.1f}%"))
         
+    #     # Colour code prediction based on accuracy
+    #     if actual_stage != "N/A" and stage == actual_stage:
+    #         # Correct prediction
+    #         for col in range(4):
+    #             item = self.pred_table.item(row_count, col)
+    #             if item:
+    #                 item.setBackground(QtGui.QColor(200, 255, 200))  # light green
+    #     elif actual_stage != "N/A":
+    #         # Incorrect prediction
+    #         for col in range(4):
+    #             item = self.pred_table.item(row_count, col)
+    #             if item:
+    #                 item.setBackground(QtGui.QColor(255, 220, 220))  # light red
 
-        # Colour code prediction based on accuracy
-        if actual_stage != "N/A" and stage == actual_stage:
-            # Correct prediction
-            for col in range(4):
-                item = self.pred_table.item(row_count, col)
-                if item:
-                    item.setBackground(QtGui.QColor(200, 255, 200))  # light green
-
-        elif actual_stage != "N/A":
-            # Incorrect prediction
-            for col in range(4):
-                item = self.pred_table.item(row_count, col)
-                if item:
-                    item.setBackground(QtGui.QColor(255, 220, 220))  # light red
-
-
-        # Scroll to show latest prediction
-        self.pred_table.scrollToBottom()
+    #     # Scroll to show latest prediction
+    #     self.pred_table.scrollToBottom()
         
-        # Limit table to last 20 rows
-        if row_count >= 20:
-            self.pred_table.removeRow(0)
+    #     # Limit table to last 20 rows
+    #     if row_count >= 20:
+    #         self.pred_table.removeRow(0)
 
-        # Increment time for next prediction (30-second epochs)
-        self.current_time += 30
-
-        # # --- SAMPLE COEFF STREAM ---
-        # coeffs = {
-        #     "A5": np.random.random(),
-        #     "D5": np.random.random(),
-        #     "D4": np.random.random(),
-        #     "D3": np.random.random(),
-        #     "D2": np.random.random(),
-        #     "D1": np.random.random()
-        # }
-
-        # # Update the live wavelet visualization
-        # self.wavelet_plot.update_coeffs(coeffs)
+    #     # Increment time for next prediction (30-second epochs)
+    #     self.current_time += 30
 
 
 
@@ -565,6 +562,7 @@ class Dashboard(QtWidgets.QWidget):
         self.pred_table.setRowCount(0)
         self.prediction_history.clear()
         self.current_pred_value.setText("")
+        self.current_time = 0
         
         # Reset the real data rolling flag
         self._real_data_rolling_active = False
@@ -681,6 +679,24 @@ class Dashboard(QtWidgets.QWidget):
 
         print(f"FPGA coefficients added to queue. Queue size: {len(self.fpga_coefficient_queue)}. Playback active: {self.fpga_playback_active}")
 
+        
+        # Only extract prediction every 5 seconds
+        if self.prediction_second_counter % 5 == 0:
+            # Extract the prediction data for this second
+            # result_array[:, second_idx] gives us [pred_index, conf_awake, conf_n1, conf_n2, conf_n3, conf_rem]
+            # flatten data first
+            flattened_pred = result_array.flatten()
+            pred_data = get_pred_data_from_data(flattened_pred)
+            print(f"FPGA prediction at second {self.prediction_second_counter}: {pred_data}")
+            
+            # Add prediction to queue (FIFO)
+            self.fpga_prediction_queue.append(pred_data)
+            print(f"FPGA prediction added to queue. Queue size: {len(self.fpga_prediction_queue)}")
+        else:
+            print(f"Dropping prediction at second {self.prediction_second_counter} (not a 5-second interval)")
+
+        self.prediction_second_counter += 1
+
 
     # FUNCTION: clear the wavelet plot (shows empty / no colors)
     def _clear_wavelet_plot(self):
@@ -706,6 +722,81 @@ class Dashboard(QtWidgets.QWidget):
             if not hasattr(self, '_queue_empty_logged'):
                 self._queue_empty_logged = True
                 print("No coefficients in queue. Wavelet plot idle.")
+
+
+    # SLOT: called by timer to process prediction queue every 5 seconds
+    def _process_prediction_queue(self):
+        """Process FPGA predictions from queue and display them"""
+        print(f"_process_prediction_queue called. Playback active: {self.fpga_playback_active}, Queue size: {len(self.fpga_prediction_queue)}")
+        if not self.fpga_playback_active:
+            print("Playback not active, returning")
+            return
+        
+        # If we have a prediction in queue, consume it and display
+        if self.fpga_prediction_queue:
+            pred_data = self.fpga_prediction_queue.popleft()
+            # pred_data = [prediction_index (0-4), confidence_value]
+            prediction_index = int(pred_data[0])
+            confidence = float(pred_data[1])
+            
+            # Map prediction index to stage name
+            stage_names = ["Awake", "N1", "N2", "N3", "REM"]
+            stage = stage_names[prediction_index] if 0 <= prediction_index < len(stage_names) else "Unknown"
+            
+            print(f"Displaying FPGA prediction: {stage} (confidence: {confidence:.4f}). Remaining in queue: {len(self.fpga_prediction_queue)}")
+            
+            # Update the current prediction display
+            self.current_pred_value.setText(stage)
+            
+            # Format time display
+            hours = int(self.current_time // 3600)
+            minutes = int((self.current_time % 3600) // 60)
+            seconds = int(self.current_time % 60)
+            time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            
+            # Get actual stage from hypnogram if available
+            if self.hypno_data is not None:
+                actual_stage = get_sleep_stage_at_time(self.hypno_data, self.current_time)
+            else:
+                actual_stage = "N/A"
+            
+            # Add new row to prediction table
+            row_count = self.pred_table.rowCount()
+            print(f"Adding row to pred_table. Current row count: {row_count}")
+            self.pred_table.insertRow(row_count)
+            print(f"Row inserted. New row count: {self.pred_table.rowCount()}")
+            
+            # Populate the new row
+            self.pred_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(time_str))
+            self.pred_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(stage))
+            self.pred_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(actual_stage))
+            self.pred_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(f"{confidence:.1f}%"))
+            
+            # Colour code prediction based on accuracy
+            if actual_stage != "N/A" and stage == actual_stage:
+                # Correct prediction
+                for col in range(4):
+                    item = self.pred_table.item(row_count, col)
+                    if item:
+                        item.setBackground(QtGui.QColor(200, 255, 200))  # light green
+            elif actual_stage != "N/A":
+                # Incorrect prediction
+                for col in range(4):
+                    item = self.pred_table.item(row_count, col)
+                    if item:
+                        item.setBackground(QtGui.QColor(255, 220, 220))  # light red
+            
+            # Scroll to show latest prediction
+            self.pred_table.scrollToBottom()
+            
+            # Limit table to last 20 rows
+            if row_count >= 20:
+                self.pred_table.removeRow(0)
+            
+            # Increment time for next prediction
+            self.current_time += 5
+        else:
+            print("No FPGA predictions in queue yet.")
 
 
     # SLOT: called when FPGA receiver encounters an error
@@ -740,8 +831,9 @@ class Dashboard(QtWidgets.QWidget):
             self.fpga_receiver.wait()
         
         # Stop timers
-        self.timer.stop()
+        # self.timer.stop()
         self.wavelet_update_timer.stop()
+        self.prediction_timer.stop()
         if hasattr(self, 'real_data_timer'):
             self.real_data_timer.stop()
         

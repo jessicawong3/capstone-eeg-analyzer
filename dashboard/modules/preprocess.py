@@ -134,11 +134,10 @@ def get_graph_data_from_data(data):
     keep_idx = [0, 5*32, 10*32, 15*32, 20*32, 25*32]
     return data[:, keep_idx]
 
-def get_graph_data_from_pred(data):
+def get_pred_data_from_data(data):
     """get prediction and confidence in that prediction"""
     """ | prediction (0-4) | confidence in Awake | confidence in N1 | confidence in N2 | confidence in N3 | confidence in REM | """
-    return [data[0], data[data[0]+1]]
-    
+    return [int(data[0]), data[int(data[0])+1]]
 
 
 
