@@ -9,6 +9,7 @@ from modules.wavelet_plotter import WaveletPlot
 from modules.workers import McuWorker, FPGAReceiverWorker
 from modules.mcu_transfer_pipeline import DEFAULT_PORT
 from modules.preprocess import get_graph_data_from_data, get_pred_data_from_data
+from modules.pynq_transfer_pipeline import setup_ssh_connection
 from uploader import UploadProgressDialog
 
 
@@ -240,6 +241,12 @@ class Dashboard(QtWidgets.QWidget):
         self.fpga_prediction_queue = deque()  # Queue to store multiple predictions (FIFO)
         self.prediction_second_counter = 0  # Counter to track seconds for 5-second prediction intervals
         self._start_fpga_receiver()
+
+        # --- SSH CONNECTION TO PYNQ ---
+        # Set up SSH connection to PYNQ board at startup
+        self.pynq_host = "127.0.0.1"  # PYNQ IP 192.168.137.28
+        self.ssh_connection = None
+        self._setup_ssh_connection()
 
 
         # Initialize visibility based on default mode
@@ -627,6 +634,21 @@ class Dashboard(QtWidgets.QWidget):
                 print("get_selected_stage: ", btn.text())
                 return btn.text()
         return "Offline"  # fallback
+
+
+    # FUNCTION: set up SSH connection to PYNQ board
+    def _setup_ssh_connection(self):
+        """Set up persistent SSH connection to PYNQ board at dashboard startup"""
+        try:
+            self.ssh_connection = setup_ssh_connection(
+                host=self.pynq_host,
+                username=None  # Default: current system user (change to xilinx)
+            )
+            print(f"SSH connection to PYNQ ({self.pynq_host}) established successfully")
+        except Exception as e:
+            print(f"Warning: Could not establish SSH connection to PYNQ at startup: {e}")
+            print("File uploads will fail until SSH is configured. Update self.pynq_host and try again.")
+            self.ssh_connection = None
 
 
     # FUNCTION: start FPGA TCP receiver

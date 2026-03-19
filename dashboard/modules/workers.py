@@ -2,9 +2,10 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import numpy as np
 from modules.mcu_transfer_pipeline import open_serial, send_stage_command, read_one_sample, mock_read_one_sample, _current_mock_stage
 from modules.preprocess import parse_mcu_sample
-from modules.pynq_transfer_pipeline import preprocess_and_send
+from modules.pynq_transfer_pipeline import preprocess_and_send, signal_fpga_process_file
 import modules.mcu_transfer_pipeline as mcu_pipeline
 from modules.tcp.receive import receive_array
+from pathlib import Path
 
 MOCK_MCU = False
 
@@ -19,14 +20,24 @@ class DatasetTransferWorker(QThread):
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
-    def __init__(self, edf_path: str):
+    def __init__(self, edf_path: str, pynq_host: str = "127.0.0.1"):
         super().__init__()
         self.edf_path = edf_path
+        self.pynq_host = pynq_host
 
     def run(self):
-        print("HELLO???")
         try:
+            # Preprocess and send the file
             preprocess_and_send(self.edf_path)
+            
+            # Signal FPGA to start processing the file
+            # filename = Path(self.edf_path).stem + ".npy"
+            # stdout, stderr, return_code = signal_fpga_process_file(filename)
+            
+            # if return_code != 0:
+            #     self.error.emit(f"FPGA processing command failed with code {return_code}\nStderr: {stderr}")
+            #     return
+            
             self.finished.emit()
         except Exception as e:
             self.error.emit(str(e))
