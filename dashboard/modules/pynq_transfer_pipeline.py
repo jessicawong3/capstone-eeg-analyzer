@@ -10,6 +10,7 @@ from modules.preprocess import preprocess_edf
 # WILL ALSO NEED TO ssh-copy-id <username>@<pynq_ip> (verify by ssh, if no password prompt then good)
 FAKE_PYNQ_DIR = str(
     Path.home().expanduser().resolve() / "fake_pynq" / "eeg_data"
+    # "/home/xilinx/"
 )
 
 # bin_path = "./test_data/processed_sleep.bin"
@@ -39,6 +40,7 @@ def preprocess_and_send(edf_path):
         local_path=processed_path,
         remote_path=FAKE_PYNQ_DIR,
         host="127.0.0.1"
+        # host="192.168.137.28"
     )
 
 
@@ -48,6 +50,7 @@ def scp_to_device(local_path, remote_path, host):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     # will need to change username= to <pynq_username> instead of getpass
     ssh.connect(hostname=host, username=getpass.getuser(), allow_agent=True, look_for_keys=True)
+    # ssh.connect(hostname=host, username="xilinx", password="xilinx", allow_agent=True, look_for_keys=False)
 
     with SCPClient(ssh.get_transport()) as scp:
         scp.put(local_path, remote_path)

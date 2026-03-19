@@ -636,11 +636,13 @@ class Dashboard(QtWidgets.QWidget):
         """Start the FPGA receiver to listen for incoming data on TCP port"""
         # Get the user's current IP address
         local_ip = self._get_local_ip()
-        
+
+        # self.fpga_receiver = FPGAReceiverWorker(host="192.168.137.1", port=9999)
         self.fpga_receiver = FPGAReceiverWorker(host=local_ip, port=9999)
         self.fpga_receiver.data_ready.connect(self._on_fpga_data_received)
         self.fpga_receiver.error.connect(self._on_fpga_error)
         self.fpga_receiver.start()
+        # print(f"FPGA Receiver started and listening on 192.168.137.1:9999...")
         print(f"FPGA Receiver started and listening on {local_ip}:9999...")
 
 

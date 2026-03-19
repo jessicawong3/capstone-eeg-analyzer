@@ -39,8 +39,8 @@ def receive_array(host='100.67.219.58', port=9999, callback=None):
                     print(f"Received array {array.shape} and result {result.shape}")
 
                     # ACK sender
-                    conn.sendall(b'ACK')
-                    print("ACK sent — connection closed\n")
+                    # conn.sendall(b'ACK')
+                    # print("ACK sent — connection closed\n")
 
                     if callback:
                         callback(array, result)
