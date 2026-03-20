@@ -792,7 +792,7 @@ class Dashboard(QtWidgets.QWidget):
             self.pred_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(time_str))
             self.pred_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(stage))
             self.pred_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(actual_stage))
-            self.pred_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(f"{confidence:.1f}%"))
+            self.pred_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(f"{confidence*100:.1f}%"))
             
             # Colour code prediction based on accuracy
             if actual_stage != "N/A" and stage == actual_stage:

@@ -132,6 +132,7 @@ def parse_npy_sample(npy_voltage):
 def get_graph_data_from_data(data):
     """extract 1 data point of eeg data from every 5 seconds windows"""
     keep_idx = [0, 5*32, 10*32, 15*32, 20*32, 25*32]
+    print(f"Wavelet coefficient data for graph: {data[:, keep_idx]}")
     return data[:, keep_idx]
 
 def get_pred_data_from_data(data):
