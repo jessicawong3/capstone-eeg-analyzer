@@ -17,7 +17,7 @@ class Dashboard(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sleep Stage Dashboard")
-        self.resize(1100, 800)
+        self.resize(1050, 800)
 
 
         # --- WIDGETS ---
@@ -131,10 +131,9 @@ class Dashboard(QtWidgets.QWidget):
         left_panel_widget.setSizePolicy(left_size_policy)
 
         # Card for signal label (file name for real data mode, sleep stage for synthetic mode)
-        # self.signal_label = QtWidgets.QLabel("")
-        # self.signal_label.setObjectName("SignalLabel")
-        signal_card = self.make_card("Signal", None)
-        # self.signal_card.setObjectName("SignalCard")
+        self.signal_label = QtWidgets.QLabel("")
+        self.signal_label.setObjectName("SignalLabel")
+        self.signal_card = self.make_signal_card("Signal:", self.signal_label)
 
         # Cards for EEG and wavelet plots
         eeg_card = self.make_card("EEG Signal", self.eeg_plot)
@@ -142,7 +141,7 @@ class Dashboard(QtWidgets.QWidget):
         wavelet_card = self.make_card("Wavelet Coefficients", self.wavelet_plot)
         wavelet_card.setMaximumHeight(400)
 
-        left_panel.addWidget(signal_card)
+        left_panel.addWidget(self.signal_card)
         left_panel.addWidget(eeg_card)
         left_panel.addWidget(wavelet_card)
         left_panel.addStretch()  # prevent cards from expanding too much
@@ -170,8 +169,7 @@ class Dashboard(QtWidgets.QWidget):
         log_card.setMinimumWidth(350)
 
         right_panel.addWidget(pred_card)
-        right_panel.addWidget(log_card)
-        right_panel.addStretch()
+        right_panel.addWidget(log_card, 1)  # Add stretch factor to make it expand vertically
 
 
 
@@ -181,7 +179,7 @@ class Dashboard(QtWidgets.QWidget):
         # everything other than controls
         sub_layout = QtWidgets.QHBoxLayout()
         sub_layout.setAlignment(QtCore.Qt.AlignTop)  # Align both panels to top
-        sub_layout.setSpacing(16) 
+        sub_layout.setSpacing(8)  # Reduced spacing to match single padding width
         sub_layout.addWidget(left_panel_widget, 2)   # Use widget instead of layout
         sub_layout.addWidget(right_panel_widget, 1)  # Use widget instead of layout
 
@@ -229,6 +227,7 @@ class Dashboard(QtWidgets.QWidget):
         self.eeg_times = None
         self.current_time = 0
         self.prediction_history = []
+        self.loaded_eeg_filename = None  # Track the loaded file name for display
 
         # --- MCU ---
         self.mcu_worker = None
@@ -278,6 +277,10 @@ class Dashboard(QtWidgets.QWidget):
             self.eeg_plot.update_plot(times, data)
             # self.wavelet_plot.load_signal(data)
             self._real_data_rolling_active = False  # Reset flag for new data
+            
+            # Store and display the filename in the signal card
+            self.loaded_eeg_filename = eeg_path.split('/')[-1]  # Extract just the filename
+            self._update_signal_card()
         except Exception as e:
             QtWidgets.QMessageBox.critical(
                 self, "EEG Loading Error", 
@@ -585,6 +588,9 @@ class Dashboard(QtWidgets.QWidget):
             self.stage_container.show()
             # Clear the plot when switching to synthetic mode
             self.eeg_plot.stop_synthetic()
+        
+        # Update signal card based on new mode
+        self._update_signal_card()
 
 
 
@@ -602,6 +608,25 @@ class Dashboard(QtWidgets.QWidget):
 
         layout.addWidget(label)
         layout.addWidget(content)
+
+        return card
+    
+
+    # FUNCTION: create a signal card widget with title and content on same line
+    def make_signal_card(self, title: str, content: QtWidgets.QWidget):
+        card = QtWidgets.QFrame()
+        card.setObjectName("Card")
+
+        layout = QtWidgets.QHBoxLayout(card)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        label = QtWidgets.QLabel(title)
+        label.setObjectName("CardTitle")
+
+        layout.addWidget(label)
+        layout.addWidget(content)
+        layout.addStretch()  # Push content to the left
 
         return card
     
@@ -625,6 +650,9 @@ class Dashboard(QtWidgets.QWidget):
             self.mcu_worker.set_stage(selected_stage)
             # Update the plot's current stage so it knows we're still in the same session
             self.eeg_plot._current_stage = selected_stage 
+        
+        # Update signal card to display the new selected stage
+        self._update_signal_card() 
 
 
     # FUNCTION: gets the selected stage
@@ -634,6 +662,21 @@ class Dashboard(QtWidgets.QWidget):
                 print("get_selected_stage: ", btn.text())
                 return btn.text()
         return "Offline"  # fallback
+
+
+    # FUNCTION: update signal card content based on current mode
+    def _update_signal_card(self):
+        """Update the signal card to display file name (real data) or sleep stage (synthetic)"""
+        if self.real_data_radio.isChecked():
+            # Real data mode: display filename or "awaiting file"
+            if self.loaded_eeg_filename:
+                self.signal_label.setText(self.loaded_eeg_filename)
+            else:
+                self.signal_label.setText("Awaiting file")
+        else:
+            # Synthetic mode: display currently selected sleep stage
+            selected_stage = self._get_selected_stage()
+            self.signal_label.setText(selected_stage)
 
 
     # FUNCTION: set up SSH connection to PYNQ board
@@ -812,8 +855,8 @@ class Dashboard(QtWidgets.QWidget):
             self.pred_table.scrollToBottom()
             
             # Limit table to last 20 rows
-            if row_count >= 20:
-                self.pred_table.removeRow(0)
+            # if row_count >= 20:
+            #     self.pred_table.removeRow(0)
             
             # Increment time for next prediction
             self.current_time += 5

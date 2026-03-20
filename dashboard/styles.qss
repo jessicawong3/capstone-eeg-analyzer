@@ -36,6 +36,13 @@ QLabel#CardTitle {
     color: #111827;
 }
 
+/* Signal label (matches CardTitle styling) */
+QLabel#SignalLabel {
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+}
+
 /* =========================
    Big prediction display
    ========================= */
