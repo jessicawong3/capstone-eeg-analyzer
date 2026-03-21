@@ -19,5 +19,8 @@ Using these technologies, the dashboard displays real-time EEG waveforms, wavele
 
 The dashboard also allows the user to control and interact with each module, such as toggling between real data and synthetic modes in the input block and selecting which data to stream to the dashboard. This dashboard provides an accessible and interactive front end for education and demonstration, closing the loop by showing the full system behavior in real-time.
 
+## ML model
+
+details can be found in https://drive.google.com/drive/folders/1oxZUoEu4gUXjIv5Lz5iTu3eLqf4LwYxH?usp=sharing
 
 
