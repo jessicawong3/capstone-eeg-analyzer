@@ -4,41 +4,78 @@ import pywt
 
 
 class WaveletPlot(pg.GraphicsLayoutWidget):
-    def __init__(self, n_levels=6, window_len=6):
+    def __init__(self, n_levels=7, window_len=6): # window_len is 6 samples
         super().__init__(title="Discrete Wavelet Transform |Coefficients|")
 
         self.n_levels = n_levels
         self.window_len = window_len
 
-        # Matrix: rows = levels, cols = time
         self.coeff_img = np.zeros((n_levels, window_len))
 
-        # Plot
         self.plot = self.addPlot()
-        self.plot.setLabel("bottom", "Time")
+        self.plot.setLabel("bottom", "Time", units="s") # Added 's' for seconds
         self.plot.setLabel("left", "DWT Level")
         self.plot.invertY(True)
 
-        # Image item
         self.img = pg.ImageItem()
+        
+        # --- THE FIX ---
+        # Scale the X-axis by 5. Now 6 samples = 30 units.
+        self.img.setScale(5) 
+        # ---------------
+        
         self.plot.addItem(self.img)
 
-        # Colormap (similar to MATLAB jet/parula)
         cmap = pg.colormap.get("viridis")
         self.img.setColorMap(cmap)
 
-        # Scale axes
-        # self.img.setRect(0, 0, self.window_len, self.n_levels)
-
-        # Y-axis ticks (levels)
-        dwt_labels = ["d3", "d4", "d5", "d6", "d7", "d8"]
+        dwt_labels = ["d3", "d4L", "d4H", "d5", "d6", "d7", "d8"]
         ticks = [(i, dwt_labels[i]) for i in range(n_levels)]
         self.plot.getAxis("left").setTicks([ticks])
 
+        # Update limits to 30 (6 samples * 5 seconds)
         self.plot.setLimits(
-            xMin=0, xMax=window_len,
+            xMin=0, xMax=window_len * 5,
             yMin=-1, yMax=n_levels
         )
+        self.plot.setXRange(0, window_len * 5)
+
+# class WaveletPlot(pg.GraphicsLayoutWidget):
+#     def __init__(self, n_levels=7, window_len=6):
+#         super().__init__(title="Discrete Wavelet Transform |Coefficients|")
+
+#         self.n_levels = n_levels
+#         self.window_len = window_len
+
+#         # Matrix: rows = levels, cols = time
+#         self.coeff_img = np.zeros((n_levels, window_len))
+
+#         # Plot
+#         self.plot = self.addPlot()
+#         self.plot.setLabel("bottom", "Time")
+#         self.plot.setLabel("left", "DWT Level")
+#         self.plot.invertY(True)
+
+#         # Image item
+#         self.img = pg.ImageItem()
+#         self.plot.addItem(self.img)
+
+#         # Colormap (similar to MATLAB jet/parula)
+#         cmap = pg.colormap.get("viridis")
+#         self.img.setColorMap(cmap)
+
+#         # Scale axes
+#         # self.img.setRect(0, 0, self.window_len, self.n_levels)
+
+#         # Y-axis ticks (levels)
+#         dwt_labels = ["d3", "d4L", "d4H", "d5", "d6", "d7", "d8"]
+#         ticks = [(i, dwt_labels[i]) for i in range(n_levels)]
+#         self.plot.getAxis("left").setTicks([ticks])
+
+#         self.plot.setLimits(
+#             xMin=0, xMax=window_len,
+#             yMin=-1, yMax=n_levels
+#         )
 
 
     def update_from_fpga(self, fpga_coefficients):

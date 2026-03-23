@@ -17,6 +17,9 @@ CHUNK_SIZE = 32
 # Worker thread for preprocessing and uploading an EDF file to the PYNQ board
 class DatasetTransferWorker(QThread):
 
+    # Emitted when file upload to PYNQ is complete
+    upload_complete = pyqtSignal()
+    # Emitted when FPGA processing is complete
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
@@ -27,17 +30,28 @@ class DatasetTransferWorker(QThread):
 
     def run(self):
         try:
+            print(f"Starting dataset transfer with file {self.edf_path}...")
             # Preprocess and send the file
             preprocess_and_send(self.edf_path)
+
+            # Signal that upload is complete
+            self.upload_complete.emit()
             
             # Signal FPGA to start processing the file
-            # filename = Path(self.edf_path).stem + ".npy"
-            # stdout, stderr, return_code = signal_fpga_process_file(filename)
+            if Path(self.edf_path).suffix == ".npy":
+                just_filename = self.edf_path.split('/')[-1]  # Extract just the filename
+                filename = Path(just_filename).with_name(
+                    Path(just_filename).stem.replace("-epochs", "") + ".npz"
+                )
+            else:
+                filename = Path(self.edf_path).stem + "_processed.npy"
+            stdout, stderr, return_code = signal_fpga_process_file(filename)
             
-            # if return_code != 0:
-            #     self.error.emit(f"FPGA processing command failed with code {return_code}\nStderr: {stderr}")
-            #     return
+            if return_code != 0:
+                self.error.emit(f"FPGA processing command failed with code {return_code}\nStderr: {stderr}")
+                return
             
+            # Signal that processing is complete
             self.finished.emit()
         except Exception as e:
             self.error.emit(str(e))

@@ -14,6 +14,7 @@ class UploadProgressDialog(QtWidgets.QDialog):
         self.setWindowFlag(QtCore.Qt.WindowCloseButtonHint, False)
 
         self._spinner_angle = 0
+        self._current_stage = "uploading"  # Track what stage we're in
 
         # Spinner canvas
         self._spinner_label = QtWidgets.QLabel()
@@ -45,6 +46,7 @@ class UploadProgressDialog(QtWidgets.QDialog):
 
         # Worker
         self._worker = DatasetTransferWorker(eeg_path)
+        self._worker.upload_complete.connect(self._on_upload_complete)
         self._worker.finished.connect(self._on_success)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -70,7 +72,29 @@ class UploadProgressDialog(QtWidgets.QDialog):
         self._spinner_label.setPixmap(pixmap)
 
 
-    # FUNCTION: show user success indication
+    # FUNCTION: show user upload success indication, then transition to FPGA processing
+    def _on_upload_complete(self):
+        """Called when file upload to PYNQ is complete, before FPGA processing starts."""
+        self._current_stage = "processing"
+        
+        # Show a checkmark
+        success_pixmap = QtGui.QPixmap(36, 36)
+        success_pixmap.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(success_pixmap)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(QtGui.QPen(QtGui.QColor("#16a34a"), 3, QtCore.Qt.SolidLine,
+                                  QtCore.Qt.RoundCap, QtCore.Qt.RoundJoin))
+        painter.drawLine(6, 18, 14, 26)
+        painter.drawLine(14, 26, 30, 10)
+        painter.end()
+        self._spinner_label.setPixmap(success_pixmap)
+        self._status.setText("Upload complete\nFPGA is processing…")
+        
+        # Restart the spinner animation for FPGA processing phase
+        self._anim_timer.start(50)
+
+
+    # FUNCTION: show user success indication after FPGA processing completes
     def _on_success(self):
         self._anim_timer.stop()
 
@@ -85,7 +109,7 @@ class UploadProgressDialog(QtWidgets.QDialog):
         painter.drawLine(14, 26, 30, 10)
         painter.end()
         self._spinner_label.setPixmap(success_pixmap)
-        self._status.setText("Upload complete")
+        self._status.setText("Processing complete")
 
         # Close automatically after 1.2 s so the user can see the confirmation
         QtCore.QTimer.singleShot(1200, self.accept)
@@ -102,122 +126,3 @@ class UploadProgressDialog(QtWidgets.QDialog):
     def error_message(self) -> str:
         return self._error_msg or ""
     
-
-
-
-# class DatasetUploader(QtWidgets.QWidget):
-#     def __init__(self):
-#         super().__init__()
-#         self.setWindowTitle("EEG Dataset Uploader")
-#         self.resize(400, 250)
-
-
-#         # --- TITLE ---
-#         self.subtitle = QtWidgets.QLabel(
-#             "Prepare and transfer EEG datasets to the PYNQ board."
-#         )
-#         self.subtitle.setWordWrap(True)
-#         self.subtitle.setAlignment(QtCore.Qt.AlignCenter)
-
-
-#         # --- CONTROLS ---
-#         self.load_button = QtWidgets.QPushButton("Select EDF File to Upload")
-#         self.load_button.setToolTip("Choose an EDF file to send to the PYNQ board")
-#         self.load_button.setFixedHeight(40)
-#         # self.load_button.setMaximumWidth(300)
-#         # self.load_button.setAlignment(QtCore.Qt.AlignCenter)
-
-
-
-#         # --- STATUS ---
-#         self.status_label = QtWidgets.QLabel("Status: Waiting for file selection")
-#         self.status_label.setObjectName("StatusLabel")
-#         self.status_label.setWordWrap(True)
-#         self.status_label.setAlignment(QtCore.Qt.AlignCenter)
-
-
-#         # --- LAYOUT ---
-#         content_layout = QtWidgets.QVBoxLayout()
-#         content_layout.setSpacing(16)
-#         # content_layout.setAlignment(QtCore.Qt.AlignCenter)
-
-#         content_layout.addWidget(self.subtitle)
-#         content_layout.addSpacing(10)
-#         content_layout.addWidget(self.load_button)
-#         content_layout.addWidget(self.status_label)
-
-#         main_layout = QtWidgets.QVBoxLayout()
-#         main_layout.addStretch()
-#         main_layout.addLayout(content_layout)
-#         main_layout.addStretch()
-
-#         self.setLayout(main_layout)
-
-
-#         # --- SIGNALS ---
-#         self.load_button.clicked.connect(self.load_data)
-
-
-
-
-#     def load_data(self):
-#         paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
-#             self, "Open EEG EDF", "", "EDF Files (*.edf)"
-#         )
-
-#         if not paths:
-#             return
-        
-#         self.path_queue = list(paths)
-#         self.curr_upload = 1
-#         self.total_uploads = len(paths)
-#         self.load_button.setEnabled(False)
-#         self.next_upload()
-
-    
-
-#     def next_upload(self):
-#         if not self.path_queue:
-#             self.all_uploads_finished()
-#             return
-
-#         path = self.path_queue.pop(0)
-#         self.status_label.setText(f"Status: Processing and uploading dataset… ({self.curr_upload}/{self.total_uploads})")
-#         self.transfer_worker = DatasetTransferWorker(path)
-#         self.transfer_worker.finished.connect(self.upload_finished)
-#         self.transfer_worker.error.connect(self.upload_error)
-#         self.transfer_worker.start()
-
-
-    
-#     def upload_finished(self):
-#         self.curr_upload += 1
-#         self.next_upload()
-
-
-
-#     def upload_error(self, message: str):
-#         self.status_label.setText(f"Status: Error — {message}")
-#         self.load_button.setEnabled(True)
-#         QtWidgets.QMessageBox.critical(self, "Upload Failed", message)
-
-
-
-#     def all_uploads_finished(self):
-#         self.status_label.setText("Status: Upload complete ✔")
-#         self.load_button.setEnabled(True)
-
-
-
-# if __name__ == "__main__":
-#     app = QtWidgets.QApplication(sys.argv)
-
-#     try:
-#         with open("./styles.qss", "r") as f:
-#             app.setStyleSheet(f.read())
-#     except FileNotFoundError:
-#         pass
-
-#     win = DatasetUploader()
-#     win.show()
-#     sys.exit(app.exec_())

@@ -9,8 +9,8 @@ from modules.preprocess import preprocess_edf
 # WILL ALSO NEED TO UPDATE HOST (ethernet?) TO SSH INTO PYNQ
 # WILL ALSO NEED TO ssh-copy-id <username>@<pynq_ip> (verify by ssh, if no password prompt then good)
 FAKE_PYNQ_DIR = str(
-    Path.home().expanduser().resolve() / "fake_pynq" / "eeg_data"
-    # "/home/xilinx/"
+    # Path.home().expanduser().resolve() / "fake_pynq" / "eeg_data"  # CHANGE
+    "/home/xilinx/uploads"
 )
 
 # bin_path = "./test_data/processed_sleep.bin"
@@ -47,21 +47,21 @@ class SSHConnectionManager:
         try:
             self.ssh = paramiko.SSHClient()
             self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.ssh.connect(
-                hostname=self.host,
-                username=self.username,
-                allow_agent=True,
-                look_for_keys=True,
-                timeout=10
-            )
             # self.ssh.connect(
             #     hostname=self.host,
             #     username=self.username,
-            #     password="xilinx",
             #     allow_agent=True,
-            #     look_for_keys=False,
+            #     look_for_keys=True,
             #     timeout=10
             # )
+            self.ssh.connect(  # CHANGE
+                hostname=self.host,
+                username=self.username,
+                password="xilinx",
+                allow_agent=True,
+                look_for_keys=False,
+                timeout=10
+            )
             self._is_connected = True
             print(f"SSH connection established to {self.host} as {self.username}")
             return True
@@ -151,26 +151,28 @@ def preprocess_and_send(edf_path):
     print("SCP target:", FAKE_PYNQ_DIR)
 
     edf_path = Path(edf_path) # need this for .stem
-    bin_path = (
+    npy_path = (
         Path("./test_data") /
-        f"{edf_path.stem}_processed.bin"
+        f"{edf_path.stem}_processed.npy"
     )
 
     # if .edf file
     if edf_path.suffix == ".edf":
-        # process edf
-        processed_path = preprocess_edf(edf_path, bin_path)
+        # process edf to npy
+        processed_path = preprocess_edf(edf_path, npy_path)
     elif edf_path.suffix == ".npy":
-        # send npy file in bin_path
-        processed_path = edf_path
+        # send npy file in npz path
+        processed_path = Path(edf_path).with_name(
+            Path(edf_path).stem.replace("-epochs", "") + ".npz"
+        )
     else:
         raise ValueError("Unsupported file type")
 
     scp_to_device(
         local_path=processed_path,
         remote_path=FAKE_PYNQ_DIR,
-        host="127.0.0.1"
-        # host="192.168.137.28"
+        # host="127.0.0.1"
+        host="192.168.137.28"  # CHANGE
     )
 
 
@@ -203,21 +205,12 @@ def scp_to_device(local_path: str, remote_path: str, host: str):
 
 
 
-def signal_fpga_process_file(filename: str, script_path: str = "/home/xilinx/process.sh") -> tuple[str, str, int]:
+def signal_fpga_process_file(filename: str) -> tuple[str, str, int]:
     """
     Signal the FPGA to start processing a file using an SSH command.
     
-    Args:
-        filename: Name of the file to process (should be in FAKE_PYNQ_DIR or remote path)
-        script_path: Path to processing script on PYNQ board (default is mock path)
-    
     Returns:
         Tuple of (stdout, stderr, return_code) from remote command execution
-    
-    Example:
-        stdout, stderr, rc = signal_fpga_process_file("data.npy")
-        if rc == 0:
-            print("Processing started successfully")
     """
     ssh_conn = get_ssh_connection()
     
@@ -225,8 +218,10 @@ def signal_fpga_process_file(filename: str, script_path: str = "/home/xilinx/pro
         raise RuntimeError("SSH connection not active")
     
     # Create command to run processing script with filename argument
-    command = f"{script_path} {filename}"
-    
+    # command = f"{script_path} {filename}"
+
+    command = f"sudo -S bash -lc 'source /etc/profile.d/pynq_venv.sh && source /etc/profile.d/xrt_setup.sh && /usr/local/share/pynq-venv/bin/python3 /home/xilinx/timed_board.py --input-npz /home/xilinx/uploads/{filename} --bitfile /home/xilinx/design_2_wrapper.bit --model /home/xilinx/TESTtinysleepnetdwt-nonormalized-2e-4.tflite --host 192.168.137.1 --port 9999 --seconds-per-step 1.0'"
+
     print(f"Signaling FPGA to process: {filename}")
     try:
         stdout, stderr, return_code = ssh_conn.execute_command(command)

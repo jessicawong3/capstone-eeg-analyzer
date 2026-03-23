@@ -7,7 +7,7 @@ import time
 
 # Serial port settings
 BAUD_RATE = 115200
-DEFAULT_PORT = "/dev/tty.usbmodem11303"
+DEFAULT_PORT = "/dev/tty.usbmodem11203" #11203 11303  # CHANGE
 
 # Command bytes to send to MCU for each sleep stage
 STAGE_COMMANDS = {

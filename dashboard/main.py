@@ -243,7 +243,7 @@ class Dashboard(QtWidgets.QWidget):
 
         # --- SSH CONNECTION TO PYNQ ---
         # Set up SSH connection to PYNQ board at startup
-        self.pynq_host = "127.0.0.1"  # PYNQ IP 192.168.137.28
+        self.pynq_host = "192.168.137.28"  # PYNQ IP 192.168.137.28  127.0.0.1. #CHANGE
         self.ssh_connection = None
         self._setup_ssh_connection()
 
@@ -685,7 +685,7 @@ class Dashboard(QtWidgets.QWidget):
         try:
             self.ssh_connection = setup_ssh_connection(
                 host=self.pynq_host,
-                username=None  # Default: current system user (change to xilinx)
+                username="xilinx"  # Default: current system user (change to xilinx) # CHANGE
             )
             print(f"SSH connection to PYNQ ({self.pynq_host}) established successfully")
         except Exception as e:
@@ -700,13 +700,13 @@ class Dashboard(QtWidgets.QWidget):
         # Get the user's current IP address
         local_ip = self._get_local_ip()
 
-        # self.fpga_receiver = FPGAReceiverWorker(host="192.168.137.1", port=9999)
-        self.fpga_receiver = FPGAReceiverWorker(host=local_ip, port=9999)
+        self.fpga_receiver = FPGAReceiverWorker(host="192.168.137.1", port=9999) # CHANGE
+        # self.fpga_receiver = FPGAReceiverWorker(host=local_ip, port=9999)
         self.fpga_receiver.data_ready.connect(self._on_fpga_data_received)
         self.fpga_receiver.error.connect(self._on_fpga_error)
         self.fpga_receiver.start()
-        # print(f"FPGA Receiver started and listening on 192.168.137.1:9999...")
-        print(f"FPGA Receiver started and listening on {local_ip}:9999...")
+        print(f"FPGA Receiver started and listening on 192.168.137.1:9999...") # CHANGE
+        # print(f"FPGA Receiver started and listening on {local_ip}:9999...")
 
 
     # FUNCTION: get the user's local IP address
