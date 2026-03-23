@@ -5,7 +5,7 @@ from modules.workers import DatasetTransferWorker
 
 # --- UPLOAD PROGRESS DIALOG ---
 class UploadProgressDialog(QtWidgets.QDialog):
-    def __init__(self, eeg_path: str, parent=None):
+    def __init__(self, eeg_path: str, fpga_receiver=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Uploading to PYNQ")
         self.setModal(True)
@@ -15,6 +15,7 @@ class UploadProgressDialog(QtWidgets.QDialog):
 
         self._spinner_angle = 0
         self._current_stage = "uploading"  # Track what stage we're in
+        self._fpga_receiver = fpga_receiver
 
         # Spinner canvas
         self._spinner_label = QtWidgets.QLabel()
@@ -50,6 +51,11 @@ class UploadProgressDialog(QtWidgets.QDialog):
         self._worker.finished.connect(self._on_success)
         self._worker.error.connect(self._on_error)
         self._worker.start()
+
+        # Connect to FPGA receiver's connection signal if available
+        if self._fpga_receiver:
+            self._fpga_receiver.fpga_connected.connect(self._on_fpga_connected)
+            self._fpga_receiver.first_data_received.connect(self._on_first_data_received)
 
         self._error_msg = None
 
@@ -88,10 +94,39 @@ class UploadProgressDialog(QtWidgets.QDialog):
         painter.drawLine(14, 26, 30, 10)
         painter.end()
         self._spinner_label.setPixmap(success_pixmap)
-        self._status.setText("Upload complete\nFPGA is processing…")
+        self._status.setText("Upload complete!\nEstablishing connection to FPGA...")
         
         # Restart the spinner animation for FPGA processing phase
         self._anim_timer.start(50)
+
+
+    # FUNCTION: handle FPGA connection
+    def _on_fpga_connected(self, addr):
+        """Called when FPGA connects via TCP"""
+        print(f"FPGA connected from {addr}")
+        self._status.setText(f"FPGA connected!\nReceiving data...")
+
+
+    # FUNCTION: handle first data received
+    def _on_first_data_received(self):
+        """Called when first data is received from FPGA"""
+        self._anim_timer.stop()
+        
+        # Show a checkmark
+        success_pixmap = QtGui.QPixmap(36, 36)
+        success_pixmap.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(success_pixmap)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(QtGui.QPen(QtGui.QColor("#16a34a"), 3, QtCore.Qt.SolidLine,
+                                  QtCore.Qt.RoundCap, QtCore.Qt.RoundJoin))
+        painter.drawLine(6, 18, 14, 26)
+        painter.drawLine(14, 26, 30, 10)
+        painter.end()
+        self._spinner_label.setPixmap(success_pixmap)
+        self._status.setText("Data ready!")
+
+        # Close automatically after 1.0 s so the user can see the confirmation
+        QtCore.QTimer.singleShot(1000, self.accept)
 
 
     # FUNCTION: show user success indication after FPGA processing completes
@@ -109,7 +144,7 @@ class UploadProgressDialog(QtWidgets.QDialog):
         painter.drawLine(14, 26, 30, 10)
         painter.end()
         self._spinner_label.setPixmap(success_pixmap)
-        self._status.setText("Processing complete")
+        self._status.setText("Processing complete!")
 
         # Close automatically after 1.2 s so the user can see the confirmation
         QtCore.QTimer.singleShot(1200, self.accept)

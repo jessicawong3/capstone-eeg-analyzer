@@ -3,7 +3,7 @@ import numpy as np
 
 stop_receiver = False
 
-def receive_array(host='0.0.0.0', port=9999, callback=None):
+def receive_array(host='0.0.0.0', port=9999, callback=None, on_connect=None):
     global stop_receiver
     stop_receiver = False
 
@@ -24,6 +24,10 @@ def receive_array(host='0.0.0.0', port=9999, callback=None):
                 break
 
             print(f"Connected by {addr}")
+            
+            # Call the on_connect callback if provided
+            if on_connect:
+                on_connect(addr)
 
             try:
                 with conn:

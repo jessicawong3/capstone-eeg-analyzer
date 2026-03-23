@@ -288,7 +288,7 @@ class Dashboard(QtWidgets.QWidget):
             return
 
         # Upload file to the PYNQ board
-        dialog = UploadProgressDialog(eeg_path, parent=self)
+        dialog = UploadProgressDialog(eeg_path, fpga_receiver=self.fpga_receiver, parent=self)
         result = dialog.exec_()   # blocks UI interaction but NOT the event loop
         if result == QtWidgets.QDialog.Rejected:
             QtWidgets.QMessageBox.warning(

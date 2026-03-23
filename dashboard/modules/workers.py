@@ -150,6 +150,10 @@ class FPGAReceiverWorker(QThread):
 
     # Emits the received EEG array (7, 960) and result array (1, 6)
     data_ready = pyqtSignal(object, object)
+    # Emits when FPGA connects (receives address tuple)
+    fpga_connected = pyqtSignal(tuple)
+    # Emits when first data is received
+    first_data_received = pyqtSignal()
     # Emits an error string if connection fails
     error = pyqtSignal(str)
 
@@ -158,6 +162,7 @@ class FPGAReceiverWorker(QThread):
         self.host = host
         self.port = port
         self._running = False
+        self._first_data_received = False
 
     def run(self):
         """Run the TCP receiver in a background thread."""
@@ -168,10 +173,22 @@ class FPGAReceiverWorker(QThread):
         def on_data_received(eeg_array, result_array):
             """Callback when data is received from FPGA"""
             print(f"Received EEG {eeg_array.shape} and result {result_array.shape}")
+            
+            # Emit first_data_received signal only once
+            if not self._first_data_received:
+                self._first_data_received = True
+                print("Emitting first_data_received signal")
+                self.first_data_received.emit()
+            
             self.data_ready.emit(eeg_array, result_array)
 
+        def on_fpga_connect(addr):
+            """Callback when FPGA connects"""
+            print(f"Emitting fpga_connected signal for {addr}")
+            self.fpga_connected.emit(addr)
+
         try:
-            receive_array(host=self.host, port=self.port, callback=on_data_received)
+            receive_array(host=self.host, port=self.port, callback=on_data_received, on_connect=on_fpga_connect)
         except Exception as e:
             self.error.emit(f"FPGA Receiver error: {str(e)}")
 
