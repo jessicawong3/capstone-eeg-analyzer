@@ -84,12 +84,13 @@ class SSHConnectionManager:
             except Exception as e:
                 print(f"Error closing SSH connection: {e}")
     
-    def execute_command(self, command: str) -> tuple[str, str, int]:
+    def execute_command(self, command: str, stdin_data: str = None) -> tuple[str, str, int]:
         """
         Execute a command on the remote PYNQ board.
         
         Args:
             command: Shell command to execute
+            stdin_data: Optional data to send to stdin (e.g., password for sudo)
         
         Returns:
             Tuple of (stdout, stderr, return_code)
@@ -99,6 +100,9 @@ class SSHConnectionManager:
         
         try:
             stdin, stdout, stderr = self.ssh.exec_command(command)
+            if stdin_data:
+                stdin.write(stdin_data + '\n')
+                stdin.flush()
             stdout_data = stdout.read().decode('utf-8')
             stderr_data = stderr.read().decode('utf-8')
             return_code = stdout.channel.recv_exit_status()
@@ -209,6 +213,9 @@ def signal_fpga_process_file(filename: str) -> tuple[str, str, int]:
     """
     Signal the FPGA to start processing a file using an SSH command.
     
+    Args:
+        filename: Name of the file to process on the FPGA
+    
     Returns:
         Tuple of (stdout, stderr, return_code) from remote command execution
     """
@@ -218,18 +225,27 @@ def signal_fpga_process_file(filename: str) -> tuple[str, str, int]:
         raise RuntimeError("SSH connection not active")
     
     # Create command to run processing script with filename argument
-    # command = f"{script_path} {filename}"
-
     command = f"sudo -S bash -lc 'source /etc/profile.d/pynq_venv.sh && source /etc/profile.d/xrt_setup.sh && /usr/local/share/pynq-venv/bin/python3 /home/xilinx/timed_board.py --input-npz /home/xilinx/uploads/{filename} --bitfile /home/xilinx/design_2_wrapper.bit --model /home/xilinx/TESTtinysleepnetdwt-nonormalized-2e-4.tflite --host 192.168.137.1 --port 9999 --seconds-per-step 1.0'"
 
-    print(f"Signaling FPGA to process: {filename}")
+    print(f"Signaling FPGA to process file: {filename}")
+    print(f"Executing command on PYNQ board...")
+    
     try:
-        stdout, stderr, return_code = ssh_conn.execute_command(command)
-        print(f"FPGA processing command result: return_code={return_code}")
+        # Pass "xilinx" password via stdin for sudo -S
+        stdout, stderr, return_code = ssh_conn.execute_command(command, stdin_data="xilinx")
+        
+        print(f"FPGA Command execution completed with return_code={return_code}")
+        
+        if return_code == 0:
+            print(f"FPGA processing started successfully")
+        else:
+            print(f"FPGA processing command failed with code {return_code}")
+        
         if stdout:
-            print(f"  stdout: {stdout}")
+            print(f"FPGA stdout: {stdout}")
         if stderr:
-            print(f"  stderr: {stderr}")
+            print(f"FPGA stderr: {stderr}")
+        
         return stdout, stderr, return_code
     except Exception as e:
         print(f"Failed to signal FPGA: {e}")
