@@ -514,8 +514,14 @@ class Dashboard(QtWidgets.QWidget):
         # Stop any running playback/predictions
         self.stop_predictions()
         
+        # Determine which mode is currently active before stopping
+        if self.synthetic_radio.isChecked():
+            current_mode = "synthetic"
+        else:
+            current_mode = "real_data"
+
         # Stop FPGA processing and data transmission when switching modes
-        stop_fpga_processing()
+        stop_fpga_processing(mode=current_mode)
         
         # Reset the FPGA receiver flag for next mode
         if self.fpga_receiver:

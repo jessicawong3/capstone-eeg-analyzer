@@ -255,10 +255,9 @@ def signal_fpga_process_file(filename: str, mode: str = "real_data") -> tuple[st
         raise
 
 
-def stop_fpga_processing() -> None:
+def stop_fpga_processing(mode: str = "real_data") -> None:
     """
-    Signal the FPGA to stop any currently running processing script.
-    Uses pkill to terminate the timed_board.py process.
+    Signal the FPGA to stop the currently running processing script.
     """
     ssh_conn = get_ssh_connection()
     
@@ -266,10 +265,17 @@ def stop_fpga_processing() -> None:
         print("SSH connection not active, can't stop FPGA")
         return
     
-    # Create command to kill the processing script
-    command = "pkill -f timed_board.py"
+    # Choose which script to kill based on mode
+    if mode == "real_data":
+        script_pattern = "timed_board.py"
+    else:  # mode == "synthetic"
+        # TODO: Replace with actual synthetic processing script name
+        script_pattern = "synthetic_processor.py"
     
-    print(f"Signaling FPGA to stop processing...")
+    # Create command to kill the processing script
+    command = f"pkill -f {script_pattern}"
+    
+    print(f"Signaling FPGA to stop processing (mode: {mode}, script: {script_pattern})...")
     
     try:
         stdout, stderr, return_code = ssh_conn.execute_command(command)
