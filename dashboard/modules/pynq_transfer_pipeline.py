@@ -226,9 +226,7 @@ def signal_fpga_process_file(filename: str, mode: str = "real_data") -> tuple[st
         # Real data mode: use timed_board.py with full configuration
         command = f"sudo -S bash -lc 'source /etc/profile.d/pynq_venv.sh && source /etc/profile.d/xrt_setup.sh && /usr/local/share/pynq-venv/bin/python3 /home/xilinx/timed_board.py --input-npz /home/xilinx/uploads/{filename} --bitfile /home/xilinx/design_2_wrapper.bit --model /home/xilinx/TESTtinysleepnetdwt-nonormalized-2e-4.tflite --host 192.168.137.1 --port 9999 --seconds-per-step 1.0'"
     else:  # mode == "synthetic"
-        # Synthetic mode: use placeholder script
-        # TODO: Replace with actual synthetic processing script
-        command = f"sudo -S bash -lc 'source /etc/profile.d/pynq_venv.sh && source /etc/profile.d/xrt_setup.sh && /usr/local/share/pynq-venv/bin/python3 /home/xilinx/synthetic_processor.py'"
+        command = f"sudo -S bash -lc 'source /etc/profile.d/pynq_venv.sh && source /etc/profile.d/xrt_setup.sh && /usr/local/share/pynq-venv/bin/python3 /home/xilinx/live_board.py --bitfile /home/xilinx/design_2_wrapper.bit --model /home/xilinx/TESTtinysleepnetdwt-nonormalized-2e-4.tflite --host 192.168.137.1 --port 9999'"
 
     print(f"Signaling FPGA to process file: {filename} (mode: {mode})")
     print(f"Executing command on PYNQ board...")
@@ -269,8 +267,7 @@ def stop_fpga_processing(mode: str = "real_data") -> None:
     if mode == "real_data":
         script_pattern = "timed_board.py"
     else:  # mode == "synthetic"
-        # TODO: Replace with actual synthetic processing script name
-        script_pattern = "synthetic_processor.py"
+        script_pattern = "live_board.py"
     
     # Create command to kill the processing script
     command = f"pkill -f {script_pattern}"
