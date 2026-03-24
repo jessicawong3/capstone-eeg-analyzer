@@ -69,16 +69,14 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
         self.img.setImage(self.coeff_img.T, autoLevels=True)
 
 
-    def clear(self):
-        # 1. Reset the internal data buffer
+    def reset_plot(self):
+        # Reset the internal data buffer
         self.coeff_img = np.zeros((self.n_levels, self.window_len))
         
-        # 2. Push zeroed data. Use autoLevels=False to prevent 
-        # the colormap from 'stretching' a zero-array into a single bright color.
+        # Push zeroed data (autoLevels=False to prevent colormap from 'stretching' a zero-array into a single bright colour)
         self.img.setImage(self.coeff_img.T, autoLevels=False, levels=[0, 1])
 
-        # 3. CRITICAL: Explicitly set the ViewBox state.
-        # This prevents the axes from collapsing if AutoRange was active.
+        # Explicitly set ViewBox state (prevents axes from collapsing if AutoRange was active)
         vb = self.plot.getViewBox()
         vb.setRange(
             xRange=(0, self.window_len * 5), 
@@ -86,11 +84,10 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
             padding=0
         )
         
-        # 4. Re-apply the ticks 
-        # Sometimes PlotItem.clear() (if called elsewhere) wipes these
+        # Re-apply the ticks
         dwt_labels = ["d3", "d4L", "d4H", "d5", "d6", "d7", "d8"]
         ticks = [(i, dwt_labels[i]) for i in range(self.n_levels)]
         self.plot.getAxis("left").setTicks([ticks])
 
-        # 5. Force a GUI refresh
+        # Force a GUI refresh
         self.plot.update()

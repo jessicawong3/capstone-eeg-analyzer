@@ -506,64 +506,6 @@ class Dashboard(QtWidgets.QWidget):
         QtWidgets.QMessageBox.critical(self, "MCU Connection Error", message)
 
 
-
-    # FUNCTION: updates the prediction
-    # def update_prediction(self):
-    #     features = None
-    #     stage, confs = self.model.predict(features)
-    #     self.current_pred_value.setText(stage)
-
-    #     # Get top confidence for predicted stage
-    #     top_confidence = confs[stage]
-
-    #     # Format time display
-    #     hours = int(self.current_time // 3600)
-    #     minutes = int((self.current_time % 3600) // 60)
-    #     seconds = int(self.current_time % 60)
-    #     time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
-    #     # Get actual stage from hypnogram if available
-    #     if self.hypno_data is not None:
-    #         actual_stage = get_sleep_stage_at_time(self.hypno_data, self.current_time)
-    #     else:
-    #         actual_stage = "N/A"
-
-    #     # Add new row to prediction table
-    #     row_count = self.pred_table.rowCount()
-    #     self.pred_table.insertRow(row_count)
-        
-    #     # Populate the new row
-    #     self.pred_table.setItem(row_count, 0, QtWidgets.QTableWidgetItem(time_str))
-    #     self.pred_table.setItem(row_count, 1, QtWidgets.QTableWidgetItem(stage))
-    #     self.pred_table.setItem(row_count, 2, QtWidgets.QTableWidgetItem(actual_stage))
-    #     self.pred_table.setItem(row_count, 3, QtWidgets.QTableWidgetItem(f"{top_confidence*100:.1f}%"))
-        
-    #     # Colour code prediction based on accuracy
-    #     if actual_stage != "N/A" and stage == actual_stage:
-    #         # Correct prediction
-    #         for col in range(4):
-    #             item = self.pred_table.item(row_count, col)
-    #             if item:
-    #                 item.setBackground(QtGui.QColor(200, 255, 200))  # light green
-    #     elif actual_stage != "N/A":
-    #         # Incorrect prediction
-    #         for col in range(4):
-    #             item = self.pred_table.item(row_count, col)
-    #             if item:
-    #                 item.setBackground(QtGui.QColor(255, 220, 220))  # light red
-
-    #     # Scroll to show latest prediction
-    #     self.pred_table.scrollToBottom()
-        
-    #     # Limit table to last 20 rows
-    #     if row_count >= 20:
-    #         self.pred_table.removeRow(0)
-
-    #     # Increment time for next prediction (30-second epochs)
-    #     self.current_time += 30
-
-
-
     # FUNCTION: updates layout based on mode (real data / synthetic)
     def update_mode(self):
         """Handle mode switching with complete cleanup of state."""
@@ -603,8 +545,8 @@ class Dashboard(QtWidgets.QWidget):
         self.eeg_plot.clear()
         
         # Clear wavelet plot
-        # print("Clearing wavelet plot...")
-        # self.wavelet_plot.clear()
+        print("Clearing wavelet plot...")
+        self.wavelet_plot.reset_plot()
 
         print("Cleaning up mode-specific resources...")
         if self.real_data_radio.isChecked():
