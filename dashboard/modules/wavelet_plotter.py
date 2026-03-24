@@ -26,7 +26,7 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
         
         self.plot.addItem(self.img)
 
-        cmap = pg.colormap.get("viridis")
+        cmap = pg.colormap.get("turbo")
         self.img.setColorMap(cmap)
 
         dwt_labels = ["d3", "d4L", "d4H", "d5", "d6", "d7", "d8"]
@@ -99,9 +99,29 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
         # 5. Display (transpose for pyqtgraph ImageItem, autoLevels=True stretched colormap)
         self.img.setImage(self.coeff_img.T, autoLevels=True)
 
+
     def clear(self):
-        """Clear all wavelet plot data for mode switching."""
+        # 1. Reset the internal data buffer
         self.coeff_img = np.zeros((self.n_levels, self.window_len))
-        self.img.setImage(self.coeff_img.T, autoLevels=True)
+        
+        # 2. Push zeroed data. Use autoLevels=False to prevent 
+        # the colormap from 'stretching' a zero-array into a single bright color.
+        self.img.setImage(self.coeff_img.T, autoLevels=False, levels=[0, 1])
 
+        # 3. CRITICAL: Explicitly set the ViewBox state.
+        # This prevents the axes from collapsing if AutoRange was active.
+        vb = self.plot.getViewBox()
+        vb.setRange(
+            xRange=(0, self.window_len * 5), 
+            yRange=(0, self.n_levels), 
+            padding=0
+        )
+        
+        # 4. Re-apply the ticks 
+        # Sometimes PlotItem.clear() (if called elsewhere) wipes these
+        dwt_labels = ["d3", "d4L", "d4H", "d5", "d6", "d7", "d8"]
+        ticks = [(i, dwt_labels[i]) for i in range(self.n_levels)]
+        self.plot.getAxis("left").setTicks([ticks])
 
+        # 5. Force a GUI refresh
+        self.plot.update()

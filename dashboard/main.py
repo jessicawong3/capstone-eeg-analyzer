@@ -9,7 +9,7 @@ from modules.wavelet_plotter import WaveletPlot
 from modules.workers import McuWorker, FPGAReceiverWorker
 from modules.mcu_transfer_pipeline import DEFAULT_PORT
 from modules.preprocess import get_graph_data_from_data, get_pred_data_from_data
-from modules.pynq_transfer_pipeline import setup_ssh_connection, stop_fpga_processing
+from modules.pynq_transfer_pipeline import setup_ssh_connection, stop_fpga_processing, signal_fpga_process_file
 from uploader import UploadProgressDialog
 
 
@@ -288,7 +288,8 @@ class Dashboard(QtWidgets.QWidget):
             return
 
         # Upload file to the PYNQ board
-        dialog = UploadProgressDialog(eeg_path, fpga_receiver=self.fpga_receiver, parent=self)
+        mode = "synthetic" if self.synthetic_radio.isChecked() else "real_data"
+        dialog = UploadProgressDialog(eeg_path, fpga_receiver=self.fpga_receiver, mode=mode, parent=self)
         result = dialog.exec_()   # blocks UI interaction but NOT the event loop
         if result == QtWidgets.QDialog.Rejected:
             QtWidgets.QMessageBox.warning(
@@ -601,11 +602,10 @@ class Dashboard(QtWidgets.QWidget):
         print("Clearing EEG plot...")
         self.eeg_plot.clear()
         
-        # Clear wavelet plot if it exists
-        if hasattr(self, 'wavelet_plot'):
-            print("Clearing wavelet plot...")
-            self.wavelet_plot.clear()
-        
+        # Clear wavelet plot
+        # print("Clearing wavelet plot...")
+        # self.wavelet_plot.clear()
+
         print("Cleaning up mode-specific resources...")
         if self.real_data_radio.isChecked():
             self.load_button.show()
@@ -618,6 +618,8 @@ class Dashboard(QtWidgets.QWidget):
             self.stage_container.show()
             # Synthetic mode doesn't use MCU, but ensure it's stopped
             self._stop_mcu_worker()
+            # Signal FPGA to start processing in synthetic mode
+            self._signal_fpga_synthetic_mode()
         
         # Update signal card based on new mode
         self._update_signal_card()
@@ -674,6 +676,12 @@ class Dashboard(QtWidgets.QWidget):
 
         selected_stage = clicked.text()
         print("Selected Stage:", selected_stage)
+        
+        # Clear queues when sleep stage changes to avoid mixing data from old stage
+        print("Clearing FPGA data queues due to stage change...")
+        self.fpga_coefficient_queue.clear()
+        self.fpga_prediction_queue.clear()
+        self.prediction_second_counter = 0
 
         # If the MCU worker is already running, just swap the stage without restarting
         if self.mcu_worker is not None and self.mcu_worker.isRunning():
@@ -716,7 +724,7 @@ class Dashboard(QtWidgets.QWidget):
         try:
             self.ssh_connection = setup_ssh_connection(
                 host=self.pynq_host,
-                username="xilinx"  # Default: current system user (change to xilinx) # CHANGE
+                username=None #"xilinx" None # Default: current system user (change to xilinx) # CHANGE
             )
             print(f"SSH connection to PYNQ ({self.pynq_host}) established successfully")
         except Exception as e:
@@ -725,19 +733,37 @@ class Dashboard(QtWidgets.QWidget):
             self.ssh_connection = None
 
 
+    def _signal_fpga_synthetic_mode(self):
+        """Signal the FPGA to start processing in synthetic mode"""
+        try:
+            # Use a placeholder filename for synthetic mode processing
+            filename = "synthetic_data.npz"
+            print(f"Signaling FPGA to start synthetic mode processing...")
+            stdout, stderr, return_code = signal_fpga_process_file(filename, mode="synthetic")
+            
+            if return_code == 0:
+                print("FPGA synthetic mode processing started successfully")
+            else:
+                print(f"Warning: FPGA processing command returned code {return_code}")
+                if stderr:
+                    print(f"Error: {stderr}")
+        except Exception as e:
+            print(f"Warning: Could not signal FPGA for synthetic mode: {e}")
+
+
     # FUNCTION: start FPGA TCP receiver
     def _start_fpga_receiver(self):
         """Start the FPGA receiver to listen for incoming data on TCP port"""
         # Get the user's current IP address
         local_ip = self._get_local_ip()
 
-        self.fpga_receiver = FPGAReceiverWorker(host="192.168.137.1", port=9999) # CHANGE
-        # self.fpga_receiver = FPGAReceiverWorker(host=local_ip, port=9999)
+        # self.fpga_receiver = FPGAReceiverWorker(host="192.168.137.1", port=9999) # CHANGE
+        self.fpga_receiver = FPGAReceiverWorker(host=local_ip, port=9999)
         self.fpga_receiver.data_ready.connect(self._on_fpga_data_received)
         self.fpga_receiver.error.connect(self._on_fpga_error)
         self.fpga_receiver.start()
-        print(f"FPGA Receiver started and listening on 192.168.137.1:9999...") # CHANGE
-        # print(f"FPGA Receiver started and listening on {local_ip}:9999...")
+        # print(f"FPGA Receiver started and listening on 192.168.137.1:9999...") # CHANGE
+        print(f"FPGA Receiver started and listening on {local_ip}:9999...")
 
 
     # FUNCTION: get the user's local IP address

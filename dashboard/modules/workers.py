@@ -7,7 +7,7 @@ import modules.mcu_transfer_pipeline as mcu_pipeline
 from modules.tcp.receive import receive_array
 from pathlib import Path
 
-MOCK_MCU = False
+MOCK_MCU = True
 
 # Number of samples to collect before emitting one signal to the UI.
 # At 256 Hz, CHUNK_SIZE=32 → ~8 UI updates/sec (plenty smooth, low overhead).
@@ -23,14 +23,15 @@ class DatasetTransferWorker(QThread):
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
-    def __init__(self, edf_path: str, pynq_host: str = "127.0.0.1"):
+    def __init__(self, edf_path: str, pynq_host: str = "127.0.0.1", mode: str = "real_data"):
         super().__init__()
         self.edf_path = edf_path
         self.pynq_host = pynq_host
+        self.mode = mode
 
     def run(self):
         try:
-            print(f"Starting dataset transfer with file {self.edf_path}...")
+            print(f"Starting dataset transfer with file {self.edf_path} in {self.mode} mode...")
             # Preprocess and send the file
             preprocess_and_send(self.edf_path)
 
@@ -45,7 +46,7 @@ class DatasetTransferWorker(QThread):
                 )
             else:
                 filename = Path(self.edf_path).stem + "_processed.npy"
-            stdout, stderr, return_code = signal_fpga_process_file(filename)
+            stdout, stderr, return_code = signal_fpga_process_file(filename, mode=self.mode)
             
             if return_code != 0:
                 self.error.emit(f"FPGA processing command failed with code {return_code}\nStderr: {stderr}")

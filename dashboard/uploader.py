@@ -5,7 +5,7 @@ from modules.workers import DatasetTransferWorker
 
 # --- UPLOAD PROGRESS DIALOG ---
 class UploadProgressDialog(QtWidgets.QDialog):
-    def __init__(self, eeg_path: str, fpga_receiver=None, parent=None):
+    def __init__(self, eeg_path: str, fpga_receiver=None, mode: str = "real_data", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Uploading to PYNQ")
         self.setModal(True)
@@ -46,7 +46,7 @@ class UploadProgressDialog(QtWidgets.QDialog):
         self._anim_timer.start(50)  # ~20 fps
 
         # Worker
-        self._worker = DatasetTransferWorker(eeg_path)
+        self._worker = DatasetTransferWorker(eeg_path, mode=mode)
         self._worker.upload_complete.connect(self._on_upload_complete)
         self._worker.finished.connect(self._on_success)
         self._worker.error.connect(self._on_error)
