@@ -250,3 +250,40 @@ def signal_fpga_process_file(filename: str) -> tuple[str, str, int]:
     except Exception as e:
         print(f"Failed to signal FPGA: {e}")
         raise
+
+
+def stop_fpga_processing() -> None:
+    """
+    Signal the FPGA to stop any currently running processing script.
+    Uses pkill to terminate the timed_board.py process.
+    """
+    ssh_conn = get_ssh_connection()
+    
+    if not ssh_conn.is_connected():
+        print("SSH connection not active, can't stop FPGA")
+        return
+    
+    # Create command to kill the processing script
+    command = "pkill -f timed_board.py"
+    
+    print(f"Signaling FPGA to stop processing...")
+    
+    try:
+        stdout, stderr, return_code = ssh_conn.execute_command(command)
+        
+        if return_code == 0:
+            print(f"FPGA processing stopped successfully")
+        else:
+            # pkill returns 1 if no process was found, which is fine
+            if "no process" in stderr.lower() or return_code == 1:
+                print(f"No running process to stop")
+            else:
+                print(f"Stop command returned code {return_code}")
+
+        if stdout:
+            print(f"stdout: {stdout}")
+        if stderr and "no process" not in stderr.lower():
+            print(f"stderr: {stderr}")
+
+    except Exception as e:
+        print(f"Failed to stop FPGA: {e}")

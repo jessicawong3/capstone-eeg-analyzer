@@ -198,3 +198,7 @@ class FPGAReceiverWorker(QThread):
         stop()
         self._running = False
 
+    def reset_first_data_flag(self):
+        self._first_data_received = False
+        print("FPGA Receiver: Reset first data flag for next mode")
+

@@ -9,7 +9,7 @@ from modules.wavelet_plotter import WaveletPlot
 from modules.workers import McuWorker, FPGAReceiverWorker
 from modules.mcu_transfer_pipeline import DEFAULT_PORT
 from modules.preprocess import get_graph_data_from_data, get_pred_data_from_data
-from modules.pynq_transfer_pipeline import setup_ssh_connection
+from modules.pynq_transfer_pipeline import setup_ssh_connection, stop_fpga_processing
 from uploader import UploadProgressDialog
 
 
@@ -567,6 +567,13 @@ class Dashboard(QtWidgets.QWidget):
     def update_mode(self):
         # Stop any running playback/predictions
         self.stop_predictions()
+        
+        # Stop FPGA processing and data transmission when switching modes
+        stop_fpga_processing()
+        
+        # Reset the FPGA receiver flag for next mode
+        if self.fpga_receiver:
+            self.fpga_receiver.reset_first_data_flag()
         
         # Clear the prediction table and history
         self.pred_table.setRowCount(0)
