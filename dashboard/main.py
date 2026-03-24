@@ -565,6 +565,9 @@ class Dashboard(QtWidgets.QWidget):
 
     # FUNCTION: updates layout based on mode (real data / synthetic)
     def update_mode(self):
+        """Handle mode switching with complete cleanup of state."""
+        print("Switching modes - initiating cleanup...")
+        
         # Stop any running playback/predictions
         self.stop_predictions()
         
@@ -575,7 +578,14 @@ class Dashboard(QtWidgets.QWidget):
         if self.fpga_receiver:
             self.fpga_receiver.reset_first_data_flag()
         
+        # Clear FPGA data queues (important - prevents stale data from appearing in new mode)
+        print("Clearing FPGA data queues...")
+        self.fpga_coefficient_queue.clear()
+        self.fpga_prediction_queue.clear()
+        self.prediction_second_counter = 0
+        
         # Clear the prediction table and history
+        print("Clearing prediction table and history...")
         self.pred_table.setRowCount(0)
         self.prediction_history.clear()
         self.current_pred_value.setText("")
@@ -584,6 +594,19 @@ class Dashboard(QtWidgets.QWidget):
         # Reset the real data rolling flag
         self._real_data_rolling_active = False
         
+        # Reset FPGA playback flag
+        self.fpga_playback_active = False
+        
+        # Clear EEG plot (resets drawing and graph state)
+        print("Clearing EEG plot...")
+        self.eeg_plot.clear()
+        
+        # Clear wavelet plot if it exists
+        if hasattr(self, 'wavelet_plot'):
+            print("Clearing wavelet plot...")
+            self.wavelet_plot.clear()
+        
+        print("Cleaning up mode-specific resources...")
         if self.real_data_radio.isChecked():
             self.load_button.show()
             self.stage_container.hide()
@@ -593,11 +616,12 @@ class Dashboard(QtWidgets.QWidget):
         else:
             self.load_button.hide()
             self.stage_container.show()
-            # Clear the plot when switching to synthetic mode
-            self.eeg_plot.stop_synthetic()
+            # Synthetic mode doesn't use MCU, but ensure it's stopped
+            self._stop_mcu_worker()
         
         # Update signal card based on new mode
         self._update_signal_card()
+        print("Mode switch complete")
 
 
 

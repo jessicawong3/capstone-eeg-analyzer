@@ -99,3 +99,9 @@ class WaveletPlot(pg.GraphicsLayoutWidget):
         # 5. Display (transpose for pyqtgraph ImageItem, autoLevels=True stretched colormap)
         self.img.setImage(self.coeff_img.T, autoLevels=True)
 
+    def clear(self):
+        """Clear all wavelet plot data for mode switching."""
+        self.coeff_img = np.zeros((self.n_levels, self.window_len))
+        self.img.setImage(self.coeff_img.T, autoLevels=True)
+
+

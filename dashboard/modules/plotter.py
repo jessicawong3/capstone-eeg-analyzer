@@ -129,3 +129,21 @@ class EEGPlot(QtWidgets.QWidget):
     def stop_synthetic(self):
         """Exit synthetic mode (keeps last frame visible)."""
         self._synthetic_mode = False
+
+    def clear(self):
+        """Clear all plot data and reset buffers for mode switching."""
+        # Clear the curve data
+        self.curve.setData([], [])
+        
+        # Reset buffers
+        self._synthetic_buffer = np.zeros(LIVE_WINDOW)
+        self._synthetic_times = np.arange(LIVE_WINDOW) / self._synthetic_fs
+        self._synthetic_mode = False
+        self._last_redraw = 0.0
+        self._current_stage = None
+        
+        self._real_data_buffer = np.zeros(LIVE_WINDOW)
+        self._real_data_times = np.arange(LIVE_WINDOW) / 256
+        
+        # Reset view
+        self.plot_widget.enableAutoRange()
