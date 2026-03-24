@@ -533,6 +533,7 @@ class Dashboard(QtWidgets.QWidget):
         self.prediction_history.clear()
         self.current_pred_value.setText("")
         self.current_time = 0
+        self.hypno_data = None
         
         # Reset the real data rolling flag
         self._real_data_rolling_active = False
@@ -543,10 +544,14 @@ class Dashboard(QtWidgets.QWidget):
         # Clear EEG plot (resets drawing and graph state)
         print("Clearing EEG plot...")
         self.eeg_plot.clear()
+        self.eeg_data = None
+        self.eeg_times = None
+        self.loaded_eeg_filename = None
         
         # Clear wavelet plot
         print("Clearing wavelet plot...")
         self.wavelet_plot.reset_plot()
+        
 
         print("Cleaning up mode-specific resources...")
         if self.real_data_radio.isChecked():
