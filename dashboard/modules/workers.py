@@ -7,7 +7,42 @@ import modules.mcu_transfer_pipeline as mcu_pipeline
 from modules.tcp.receive import receive_array
 from pathlib import Path
 
-MOCK_MCU = True
+MOCK_MCU = False
+
+
+# Worker thread for signaling FPGA to start processing
+class FPGAStartWorker(QThread):
+    """
+    Background worker to start FPGA processing without blocking the UI.
+    The signal_fpga_process_file() SSH call can block for a long time.
+    """
+    
+    # Emitted when FPGA processing has been signaled to start
+    started = pyqtSignal()
+    # Emitted when there's an error
+    error = pyqtSignal(str)
+
+    def __init__(self, filename: str, mode: str = "synthetic"):
+        super().__init__()
+        self.filename = filename
+        self.mode = mode
+
+    def run(self):
+        try:
+            print(f"Signaling FPGA to start {self.mode} mode processing in background thread...")
+            stdout, stderr, return_code = signal_fpga_process_file(self.filename, mode=self.mode)
+            
+            if return_code == 0:
+                print("FPGA processing started successfully")
+                self.started.emit()
+            else:
+                error_msg = f"FPGA processing command failed with return code {return_code}"
+                if stderr:
+                    error_msg += f"\nStderr: {stderr}"
+                self.error.emit(error_msg)
+        except Exception as e:
+            self.error.emit(f"Could not signal FPGA: {str(e)}")
+            print(f"Error: {e}")
 
 # Number of samples to collect before emitting one signal to the UI.
 # At 256 Hz, CHUNK_SIZE=32 → ~8 UI updates/sec (plenty smooth, low overhead).
