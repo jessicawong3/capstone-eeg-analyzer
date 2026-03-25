@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import mne
 import numpy as np
+import re
+from pathlib import Path
 
 TARGET_FS = 256  # Hz
 
 
 # --- For FPGA --- #
 def preprocess_edf(input_path, output_path):
+    """
+    Preprocess EDF file and save as .npz with epochs and labels.
+    """
     raw = mne.io.read_raw_edf(input_path, preload=True, verbose=False)
     eeg_channel = "EEG Fpz-Cz"
 
@@ -30,10 +35,128 @@ def preprocess_edf(input_path, output_path):
     # Reshape to (n_epochs, samples_per_epoch) - same format as quantized_epochs.npy
     channel_epochs = selected_channel_data[:n_epochs * samples_per_epoch].reshape(n_epochs, samples_per_epoch)
 
-    # Export quantized epochs as .npy file
-    np.save(output_path, channel_epochs)  # Save the raw epochs; quantization done on the FPGA side
+    # Extract labels from hypnogram file
+    labels = _extract_labels_from_hypnogram(input_path, n_epochs)
+    
+    # Ensure labels match the number of epochs
+    if labels is not None and len(labels) != n_epochs:
+        print(f"Warning: Label count ({len(labels)}) doesn't match epoch count ({n_epochs}). "
+              f"Truncating or padding labels.")
+        if len(labels) < n_epochs:
+            # Pad with -1 (unknown) if we have fewer labels
+            labels = np.pad(labels, (0, n_epochs - len(labels)), constant_values=-1)
+        else:
+            # Truncate if we have more labels
+            labels = labels[:n_epochs]
+    elif labels is None:
+        # Default to 0 (unknown) if we couldn't extract labels
+        labels = np.zeros(n_epochs, dtype=np.int64)
+    
+    # Ensure labels are int64 to match demo format
+    labels = np.array(labels, dtype=np.int64)
+    
+    # Convert output_path to .npz if needed
+    output_path_obj = Path(output_path)
+    if output_path_obj.suffix != ".npz":
+        output_path = str(output_path_obj.with_suffix(".npz"))
+    
+    # Save as .npz file with epochs and labels
+    np.savez(output_path, epochs=channel_epochs, labels=labels)
+    print(f"Saved preprocessed data to {output_path}")
+    print(f"  Epochs shape: {channel_epochs.shape}")
+    print(f"  Labels shape: {labels.shape}")
 
     return output_path
+
+
+def _extract_labels_from_hypnogram(eeg_path, n_epochs):
+    """
+    Extract sleep stage labels from the hypnogram EDF file corresponding to the EEG file.
+    """
+    eeg_path = Path(eeg_path)
+    eeg_dir = eeg_path.parent
+    eeg_name = eeg_path.stem
+    
+    # Try to find the corresponding hypnogram file
+    hypno_candidates = []
+    
+    # Pattern 1: Replace "PSG" with "Hypnogram" (SC4591G0-PSG.edf -> SC4591GY-Hypnogram.edf)
+    if "PSG" in eeg_name:
+        hypno_name = eeg_name.replace("PSG", "Hypnogram").replace("G0", "GY") + ".edf"
+        hypno_candidates.append(eeg_dir / hypno_name)
+    
+    # Pattern 2: Add "-Hypnogram" suffix (SC4591G0.edf -> SC4591G0-Hypnogram.edf)
+    hypno_name = eeg_name + "-Hypnogram.edf"
+    hypno_candidates.append(eeg_dir / hypno_name)
+    
+    # Pattern 3: Replace subject ID pattern with Y suffix (SC4591G0 -> SC4591GY)
+    match = re.search(r'(\w+)G0', eeg_name)
+    if match:
+        base = match.group(1)
+        hypno_name = base + "GY-Hypnogram.edf"
+        hypno_candidates.append(eeg_dir / hypno_name)
+    
+    # Try to read from the first existing hypnogram file
+    for hypno_path in hypno_candidates:
+        if hypno_path.exists():
+            return _extract_labels_from_hypnogram_file(str(hypno_path), n_epochs)
+    
+    print(f"Warning: Could not find hypnogram file for {eeg_path}")
+    return None
+
+
+def _extract_labels_from_hypnogram_file(hypno_path, n_epochs):
+    """
+    Extract sleep stage labels from a hypnogram EDF file.
+    """
+    try:
+        # Read annotations from the hypnogram file
+        annotations = mne.read_annotations(hypno_path)
+        
+        # Stage mapping to numeric labels
+        stage_map = {
+            'Sleep stage W': 0,
+            'Sleep stage 1': 1,
+            'Sleep stage 2': 2,
+            'Sleep stage 3': 3,
+            'Sleep stage 4': 3,  # N4 combined with N3
+            'Sleep stage R': 4,
+            'Sleep stage ?': -1,
+            'W': 0,
+            'N1': 1,
+            'N2': 2,
+            'N3': 3,
+            'N4': 3,
+            'R': 4,
+            'REM': 4
+        }
+        
+        # Extract labels for each 30-second epoch
+        labels = []
+        for i in range(n_epochs):
+            epoch_start = i * 30  # Each epoch is 30 seconds
+            epoch_end = (i + 1) * 30
+            
+            # Find annotation that covers this epoch
+            label = -1  # Default to unknown
+            for onset, duration, description in zip(
+                annotations.onset, annotations.duration, annotations.description
+            ):
+                # Check if this annotation overlaps with the epoch
+                annot_end = onset + duration
+                if onset <= epoch_start < annot_end or onset < epoch_end <= annot_end:
+                    label = stage_map.get(str(description), -1)
+                    break
+            
+            labels.append(label)
+        
+        labels = np.array(labels, dtype=np.int64)
+        print(f"Extracted {len(labels)} labels from hypnogram")
+        return labels
+        
+    except Exception as e:
+        print(f"Error extracting labels from hypnogram {hypno_path}: {e}")
+        return None
 
 
 # want to call like quantization_function(int_bits=1, fraction_bits=14, signed_dec=unquntized_data)

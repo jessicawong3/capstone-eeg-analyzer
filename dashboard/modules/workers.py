@@ -102,13 +102,18 @@ class DatasetTransferWorker(QThread):
             self.upload_complete.emit()
             
             # Signal FPGA to start processing the file
-            if Path(self.edf_path).suffix == ".npy":
+            if Path(self.edf_path).suffix == ".edf":
+                # EDF file: will be converted to .npz with name_processed.npz
+                filename = Path(self.edf_path).stem + "_processed.npz"
+            elif Path(self.edf_path).suffix == ".npy":
+                # NPY file: convert to .npz format
                 just_filename = self.edf_path.split('/')[-1]  # Extract just the filename
                 filename = Path(just_filename).with_name(
                     Path(just_filename).stem.replace("-epochs", "") + ".npz"
                 )
             else:
-                filename = Path(self.edf_path).stem + "_processed.npy"
+                raise ValueError(f"Unsupported file type: {Path(self.edf_path).suffix}")
+            
             stdout, stderr, return_code = signal_fpga_process_file(filename, mode=self.mode)
             
             if return_code != 0:

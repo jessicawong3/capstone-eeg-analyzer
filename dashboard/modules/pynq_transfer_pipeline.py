@@ -155,15 +155,15 @@ def preprocess_and_send(edf_path):
     print("SCP target:", FAKE_PYNQ_DIR)
 
     edf_path = Path(edf_path) # need this for .stem
-    npy_path = (
+    npz_path = (
         Path("./test_data") /
-        f"{edf_path.stem}_processed.npy"
+        f"{edf_path.stem}_processed.npz"
     )
 
     # if .edf file
     if edf_path.suffix == ".edf":
-        # process edf to npy
-        processed_path = preprocess_edf(edf_path, npy_path)
+        # process edf to npz with epochs and labels
+        processed_path = preprocess_edf(edf_path, npz_path)
     elif edf_path.suffix == ".npy":
         # send npy file in npz path
         processed_path = Path(edf_path).with_name(
