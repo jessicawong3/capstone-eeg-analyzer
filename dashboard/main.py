@@ -880,8 +880,11 @@ class Dashboard(QtWidgets.QWidget):
             seconds = int(self.current_time % 60)
             time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
             
-            # Get actual stage from hypnogram if available
-            if self.hypno_data is not None:
+            # In synthetic mode use the selected stage as the "actual" stage
+            if not self.real_data_radio.isChecked():
+                actual_stage = self._get_selected_stage()
+            # Get actual stage from hypnogram if available (real data mode)
+            elif self.hypno_data is not None:
                 actual_stage = get_sleep_stage_at_time(self.hypno_data, self.current_time)
             else:
                 actual_stage = "N/A"
