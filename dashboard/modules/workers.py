@@ -2,12 +2,40 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import numpy as np
 from modules.mcu_transfer_pipeline import open_serial, send_stage_command, read_one_sample, mock_read_one_sample, _current_mock_stage
 from modules.preprocess import parse_mcu_sample
-from modules.pynq_transfer_pipeline import preprocess_and_send, signal_fpga_process_file
+from modules.pynq_transfer_pipeline import preprocess_and_send, signal_fpga_process_file, stop_fpga_processing
 import modules.mcu_transfer_pipeline as mcu_pipeline
 from modules.tcp.receive import receive_array
 from pathlib import Path
 
 MOCK_MCU = False
+
+
+# Worker thread for stopping FPGA processing
+class FPGAStopWorker(QThread):
+    """
+    Background worker to stop FPGA processing without blocking the UI.
+    The stop_fpga_processing() SSH call can block for a long time.
+    """
+    
+    # Emitted when FPGA processing has been stopped
+    stopped = pyqtSignal()
+    # Emitted when there's an error
+    error = pyqtSignal(str)
+
+    def __init__(self, mode: str = "real_data"):
+        super().__init__()
+        self.mode = mode
+
+    def run(self):
+        try:
+            print(f"Stopping FPGA {self.mode} mode processing in background thread...")
+            stop_fpga_processing(mode=self.mode)
+            print("FPGA processing stopped successfully")
+            self.stopped.emit()
+        except Exception as e:
+            # Don't treat stop failures as critical errors - process might not be running
+            print(f"FPGA stop notice: {str(e)}")
+            self.stopped.emit()
 
 
 # Worker thread for signaling FPGA to start processing
@@ -106,6 +134,7 @@ class McuWorker(QThread):
         self.port = port
         self.stage = stage
         self._running = False
+        self._serial = None  # Keep reference to serial port for cleanup
 
     def set_stage(self, stage: str):
         """Change the current stage without stopping the worker."""
@@ -120,7 +149,13 @@ class McuWorker(QThread):
         while count < CHUNK_SIZE:
             if not self._running:
                 return None
-            token = read_fn()
+            try:
+                token = read_fn()
+            except Exception:
+                # If read fails, check if we're supposed to stop
+                if not self._running:
+                    return None
+                raise
             if token is None:
                 continue
             voltage = parse_mcu_sample(token)
@@ -145,6 +180,7 @@ class McuWorker(QThread):
         else:
             try:
                 ser = open_serial(self.port)
+                self._serial = ser  # Keep reference for cleanup
             except Exception as e:
                 self.error.emit(f"Could not open serial port {self.port}:\n{e}")
                 return
@@ -175,10 +211,18 @@ class McuWorker(QThread):
                     self.chunk_ready.emit(chunk)
 
             ser.close()
+            self._serial = None
 
     def stop(self):
-        """Signal the worker loop to exit."""
+        """Signal the worker loop to exit and close serial port to interrupt reads."""
         self._running = False
+        # Close serial port immediately to interrupt any blocking read
+        if self._serial is not None:
+            try:
+                self._serial.close()
+            except Exception:
+                pass  # Already closed or error closing
+            self._serial = None
 
 
 # Worker thread for receiving FPGA data over TCP

@@ -6,10 +6,10 @@ from modules.data_loader import load_eeg_data, load_npy_eeg_data, load_hypnogram
 from modules.plotter import EEGPlot
 from modules.mock_model import MockEEGModel
 from modules.wavelet_plotter import WaveletPlot
-from modules.workers import McuWorker, FPGAReceiverWorker, FPGAStartWorker
+from modules.workers import McuWorker, FPGAReceiverWorker, FPGAStartWorker, FPGAStopWorker
 from modules.mcu_transfer_pipeline import DEFAULT_PORT
 from modules.preprocess import get_graph_data_from_data, get_pred_data_from_data
-from modules.pynq_transfer_pipeline import setup_ssh_connection, stop_fpga_processing, signal_fpga_process_file
+from modules.pynq_transfer_pipeline import setup_ssh_connection, signal_fpga_process_file
 from uploader import UploadProgressDialog
 
 class Dashboard(QtWidgets.QWidget):
@@ -234,6 +234,9 @@ class Dashboard(QtWidgets.QWidget):
         # --- FPGA START WORKER ---
         self.fpga_start_worker = None
 
+        # --- FPGA STOP WORKER ---
+        self.fpga_stop_worker = None
+
         # --- FPGA TCP RECEIVER ---
         self.fpga_receiver = None
         self.fpga_playback_active = False  # Flag to control when wavelet updates
@@ -446,8 +449,13 @@ class Dashboard(QtWidgets.QWidget):
     # FUNCTION: starts synthetic mode
     def _start_synthetic(self):
 
-        # Stop any existing worker
-        self._stop_mcu_worker()
+        # Stop any existing worker and wait briefly for cleanup
+        # Use a very short timeout (100ms) - just to ensure it exits quickly
+        if self.mcu_worker is not None:
+            self.mcu_worker.stop()
+            # Give it a very short time to finish (100ms should be enough with port closed)
+            self.mcu_worker.wait(100)
+            # Now we can safely create a new worker
 
         # Get the currently selected stage
         selected_stage = self._get_selected_stage()
@@ -458,7 +466,6 @@ class Dashboard(QtWidgets.QWidget):
         self.mcu_worker.error.connect(self._on_mcu_error)
         self.eeg_plot.start_synthetic(stage=selected_stage)
         self.mcu_worker.start()
-
 
     # FUNCTION: stops the predictions
     def stop_predictions(self):
@@ -479,22 +486,47 @@ class Dashboard(QtWidgets.QWidget):
         if hasattr(self, 'real_data_timer'):
             self.real_data_timer.stop()
         self.eeg_plot.stop_synthetic()
-        self.eeg_plot.stop_synthetic()
 
 
     # FUNCTION: stops an mcu worker
     def _stop_mcu_worker(self):
+        """Stop MCU worker without blocking the UI thread."""
         if self.mcu_worker is not None:
+            # Signal the worker to stop (this closes the serial port immediately)
+            # Do NOT wait on UI thread - that blocks the entire event loop and freezes the UI
             self.mcu_worker.stop()
-            self.mcu_worker.wait()
-            self.mcu_worker = None
+            # The worker will finish in the background
+            # NOTE: We intentionally do NOT call wait() here as it blocks the UI thread
 
     # FUNCTION: stops the FPGA start worker
     def _stop_fpga_start_worker(self):
         if self.fpga_start_worker is not None:
             self.fpga_start_worker.quit()
-            self.fpga_start_worker.wait()
-            self.fpga_start_worker = None
+            # Do NOT wait on UI thread - that blocks the event loop
+            # The worker will finish in the background
+
+    # FUNCTION: stops the FPGA in background to avoid UI blocking
+    def _stop_fpga_background(self, mode: str = "real_data"):
+        """Stop FPGA processing in background thread to prevent UI stalls."""
+        # Clean up any existing stop worker (non-blocking with timeout)
+        if self.fpga_stop_worker is not None:
+            if self.fpga_stop_worker.isRunning():
+                self.fpga_stop_worker.stopped.disconnect()  # Disconnect old signals
+                self.fpga_stop_worker.error.disconnect()
+        
+        # Start new stop worker
+        self.fpga_stop_worker = FPGAStopWorker(mode=mode)
+        self.fpga_stop_worker.stopped.connect(self._on_fpga_stop_complete)
+        self.fpga_stop_worker.error.connect(self._on_fpga_stop_error)
+        self.fpga_stop_worker.start()
+
+    # SLOT: called when FPGA stop worker completes
+    def _on_fpga_stop_complete(self):
+        print("FPGA stop completed")
+    
+    # SLOT: called when FPGA stop worker encounters an error
+    def _on_fpga_stop_error(self, message: str):
+        print(f"FPGA stop error: {message}")
 
     # SLOT: called for each chunk of preprocessed voltage samples from the MCU worker
     def _on_mcu_chunk(self, chunk):
@@ -521,17 +553,16 @@ class Dashboard(QtWidgets.QWidget):
         """Handle mode switching with complete cleanup of state."""
         print("Switching modes - initiating cleanup...")
         
+        # Determine which mode WAS running before switching
+        # (check actual running state, not radio button state which has already changed)
+        mcu_was_running = self.mcu_worker is not None and self.mcu_worker.isRunning()
+        previous_mode = "synthetic" if mcu_was_running else "real_data"
+        
         # Stop any running playback/predictions
         self.stop_predictions()
-        
-        # Determine which mode is currently active before stopping
-        if self.synthetic_radio.isChecked():
-            current_mode = "synthetic"
-        else:
-            current_mode = "real_data"
 
-        # Stop FPGA processing and data transmission when switching modes
-        stop_fpga_processing(mode=current_mode)
+        # Stop FPGA processing in background to avoid UI blocking
+        self._stop_fpga_background(mode=previous_mode)
         
         # Reset the FPGA receiver flag for next mode
         if self.fpga_receiver:
@@ -918,12 +949,15 @@ class Dashboard(QtWidgets.QWidget):
         
         # Stop MCU worker if running
         if self.mcu_worker is not None:
-            self._stop_mcu_worker()
+            self.mcu_worker.stop()
+            # Wait for receiver to stop during app close (more time is acceptable here)
+            self.mcu_worker.wait(500)  # 500ms timeout for app shutdown
         
         # Stop FPGA receiver if running
         if self.fpga_receiver is not None:
             self.fpga_receiver.stop()
-            self.fpga_receiver.wait()
+            # Wait for receiver to stop during app close
+            self.fpga_receiver.wait(500)  # 500ms timeout for app shutdown
         
         # Stop timers
         # self.timer.stop()
@@ -933,8 +967,6 @@ class Dashboard(QtWidgets.QWidget):
             self.real_data_timer.stop()
         
         event.accept()
-
-
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
